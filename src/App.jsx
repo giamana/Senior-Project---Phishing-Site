@@ -14,15 +14,38 @@ import AboutPage from "./views/AboutPage"
 import SignUpPage from "./views/SignUpPage"
 
 import React from "react"
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 
+
+function NavBarWrapper(){
+   const location = useLocation();
+   let navProps; 
+
+   const defaultProps = { className: "shadow-md bg-[#181818]/75 fixed top-0 z-20 w-3/5 justify-center items-center left-1/2 transform -translate-x-1/2"};
+
+   const platformProps = { className: "shadow-md bg-[#404143] fixed top-0 z-20 w-full justify-center items-center"}
+
+   if (location.pathname === "/login") {
+    return null;
+  }
+  
+   if (location.pathname === "/platform"){
+    navProps = platformProps;
+   }else{
+    navProps = defaultProps;
+   }
+
+   const hideButton = location.pathname === "/platform";
+
+  return <NavBar {...navProps} hideButton={hideButton} />;
+
+}
 
 
 function App() {
-
   return (
     <BrowserRouter>
-        <NavBar />
+        <NavBarWrapper />
 
         <Routes>
            <Route path="/" element={<HomePage />} />
