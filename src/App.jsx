@@ -25,7 +25,7 @@ function NavBarWrapper(){
 
    const platformProps = { className: "shadow-md bg-[#404143] fixed top-0 z-20 w-full justify-center items-center"}
 
-   if (location.pathname === "/login") {
+   if (location.pathname === "/login" || location.pathname === "/signUp") {
     return null;
   }
   
