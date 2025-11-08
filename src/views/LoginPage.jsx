@@ -45,7 +45,7 @@ function LoginPage() {
           <h3 className="text-gray-400 text-xl">Please log into your account.</h3>
         </div>
 
-        <form onSubmit={handleSumbit}>
+        <form onSubmit={handleSumbit} className="flex flex-col w-full items-center justify-center">
             <input
               type="text"
               placeholder="Username"

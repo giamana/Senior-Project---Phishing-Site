@@ -2,16 +2,14 @@ import React, { useEffect } from 'react';
 import { useRef } from 'react';
 
 function SignUpPage() {
+    const fname =  useRef();
+    const lname =  useRef();
+    const email =  useRef();
+    const number =  useRef();
 
-    const navi = useNavigate();
-        const fname =  useRef();
-        const lname =  useRef();
-        const email =  useRef();
-        const number =  useRef();
-
-        const handleSumbit = (event) => {
-            event.preventDefault();
-            console.log(name.current.value);
+    const handleSumbit = (event) => {
+        event.preventDefault();
+        console.log(fname.current.value);
     }
 
     useEffect(() => {
