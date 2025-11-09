@@ -2,6 +2,8 @@ import sqlite3
 from datetime import datetime, timedelta
 import random
 
+from backend.db.email_scheduler import send_email
+
 # Connect to (or create) the database file in the same directory
 connection = sqlite3.connect("database.db")
 cursor = connection.cursor()
@@ -569,8 +571,8 @@ def send_scheduled_emails():
         
         # Mark as sent
         cursor.execute('''
-            UPDATE scheduled_emails 
-            SET sent = 1, sent_at = ? 
+            UPDATE scheduled_emails
+            SET sent = 1, sent_at = ?
             WHERE id = ?
         ''', (now, email_id))
     

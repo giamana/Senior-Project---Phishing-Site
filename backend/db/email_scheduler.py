@@ -11,14 +11,15 @@ import time
 DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
 
 # TODO: move these to environment variables for security
-SENDER_EMAIL = "axijewere@gmail.com"
-SENDER_PASSWORD = "agboga2014"
+SENDER_EMAIL = "airline.itdesk@gmail.com"
+#this is the app password for the email account
+SENDER_PASSWORD = "bktjqkfrgnmthusd"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
 
 # --- Function: send email ---
-def send_email(receiver_email, subject, body):
+def  send_email(receiver_email, subject, body):
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
     msg["To"] = receiver_email
