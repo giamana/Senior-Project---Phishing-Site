@@ -64,6 +64,35 @@ function SignUpPage() {
                     ref={number}
                     className="w-full p-2 rounded-md bg-transparent border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2  mb-6"
                 />
+
+
+                <div className="flex flex-row w-full">
+                    <div className="ps-4 border border-gray-200 rounded-sm dark:border-neutral-700 flex items-center w-1/2">
+                        <input
+                        id="bordered-radio-1" type="radio" value="option1" name="bordered-radio" className="w-4 h-4  bg-gray-100 border-gray-300"
+                        />
+                        <label htmlFor="bordered-radio-1" className="w-full py-4 ms-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                        Employer
+                        </label>
+                    </div>
+
+                    <div className="ps-4 border border-gray-200 rounded-sm dark:border-neutral-700 flex items-center mx-30">
+                        <input
+                        id="bordered-radio-2"
+                        type="radio"
+                        value="option2"
+                        name="bordered-radio"
+                        className="w-4 h-4 bg-gray-100 border-gray-300" />
+                        <label
+                        htmlFor="bordered-radio-2"
+                        className="w-full py-4 ms-2 text-sm font-medium text-gray-900 dark:text-gray-300"
+                        >
+                        Employee
+                        </label>
+                    </div>
+                </div>
+
+                
             </form>
             
 

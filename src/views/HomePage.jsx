@@ -9,13 +9,13 @@ function HomePage() {
         <img src="https://i.pinimg.com/736x/36/d7/0a/36d70ab2a9527f9382601ae73f8b6310.jpg" alt="Background" className="w-full h-screen object-cover" />
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <h1 className="text-white text-8xl font-bold z-10 text-center">Your Crew’s Shield <br />Against Phishing</h1>
-          <button class="bg-white hover:bg-[#CDCDCD] text-black font-bold py-5 px-5 rounded mt-5 p-2">Watch Our Demo</button>
+          <button onClick={() => navi('/demo')} class="bg-white hover:bg-[#CDCDCD] text-black font-bold py-5 px-5 rounded mt-5 p-2">Watch Our Demo</button>
         </div>
       </div> 
 
       <header className=" text-black py-8">
         <div className="container mx-auto px-6 text-center">
-          <h1 className="text-4xl font-bold">About Phishing Awareness</h1>
+          <h1 className="text-4xl font-bold">Redefining Security Awareness Training Excellence</h1>
           <p className="mt-2 text-lg">Protecting our airline and our passengers from phishing attacks</p>
         </div>
       </header>

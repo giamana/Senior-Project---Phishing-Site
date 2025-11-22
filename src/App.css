@@ -20,3 +20,20 @@
 body{
   font-family: "Poppins", sans-serif;
 }
+
+.video-responsive {
+  position: relative;
+  padding-bottom: 56.25%; 
+  height: 0;
+  overflow: hidden;
+  margin-top: 70px;       
+}
+
+.video-responsive iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;          
+  height: 50%;          
+  border: 0;
+}

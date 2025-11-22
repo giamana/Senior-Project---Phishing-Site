@@ -62,7 +62,7 @@ function LoginPage() {
 
         <div className="flex mt-6">
           <button
-            onClick={() => navi('/platform')}
+            // onClick={() => navi('/platform')}
             className="bg-black hover:bg-[#CDCDCD] text-white font-bold py-3 px-10 mx-5"
           >
             Login
