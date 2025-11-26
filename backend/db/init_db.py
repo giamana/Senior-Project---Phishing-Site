@@ -1,15 +1,19 @@
 import sqlite3
 from datetime import datetime, timedelta
 import json
+import os
 
-# Connect to (or create) the database file in the same directory
-connection = sqlite3.connect("database.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
+
+# Connect to (or create) the database file in this directory
+connection = sqlite3.connect(DB_PATH)
 cursor = connection.cursor()
 
 # Disable foreign key checks while dropping tables to avoid dependency errors
 cursor.execute('PRAGMA foreign_keys = OFF;')
 
 # --- DROP existing tables (order doesn't need to be strict when FK checks are off) ---
+cursor.execute('DROP TABLE IF EXISTS tracking_tokens;')
 cursor.execute('DROP TABLE IF EXISTS scheduled_emails;')
 cursor.execute('DROP TABLE IF EXISTS email_templates;')
 cursor.execute('DROP TABLE IF EXISTS campaigns;')
@@ -67,7 +71,9 @@ CREATE TABLE metrics (
     date DATETIME DEFAULT CURRENT_TIMESTAMP,
     click_rate REAL CHECK(click_rate >= 0 AND click_rate <= 1),
     report_rate REAL CHECK(report_rate >= 0 AND report_rate <= 1),
+    ignore_rate REAL CHECK(ignore_rate >= 0 AND ignore_rate <= 1),
     accuracy_rate REAL CHECK(accuracy_rate >= 0 AND accuracy_rate <= 1),
+    score REAL CHECK(score >= 0 AND score <= 100),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 ''')
@@ -115,6 +121,21 @@ CREATE TABLE scheduled_emails (
     FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (template_id) REFERENCES email_templates(id) ON DELETE CASCADE
+);
+''')
+
+# Create Tracking Tokens table
+cursor.execute('''
+CREATE TABLE tracking_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    simulation_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    action TEXT NOT NULL CHECK(action IN ('clicked', 'reported')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    acted_at DATETIME,
+    FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 ''')
 
