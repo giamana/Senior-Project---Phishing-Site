@@ -18,44 +18,43 @@ import React from "react"
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 
 
-function NavBarWrapper(){
-   const location = useLocation();
-   let navProps; 
+function NavBarWrapper() {
+    const location = useLocation();
+    let navProps;
 
-   const defaultProps = { className: "shadow-md bg-[#181818]/75 fixed top-0 z-20 w-3/5 justify-center items-center left-1/2 transform -translate-x-1/2"};
+    const defaultProps = {
+      className:
+        "shadow-md bg-[#181818]/75 fixed top-0 z-20 w-3/5 justify-center items-center left-1/2 transform -translate-x-1/2",
+    };
 
-   const platformProps = { className: "shadow-md bg-[#404143] fixed top-0 z-20 w-full justify-center items-center"}
+    const platformProps = {
+      className: "shadow-md bg-[#404143] fixed top-0 z-20 w-full justify-center items-center",
+    };
 
-   if (location.pathname === "/login" || location.pathname === "/signUp" ) {
-    return null;
+    if (location.pathname === "/login" || location.pathname === "/signUp") {
+      return null;
+    }
+
+    // Define onPlatform upfront
+    const onPlatform =
+      location.pathname === "/platform" ||
+      location.pathname === "/summary" ||
+      location.pathname === "/resources" ||
+      location.pathname === "/demo" ||
+      location.pathname.startsWith("/platform") ||
+      location.pathname.startsWith("/employees");
+
+    if (onPlatform) {
+      navProps = platformProps;
+    } else {
+      navProps = defaultProps;
+    }
+
+    const hideButton = onPlatform;
+
+    return <NavBar {...navProps} hideButton={hideButton} />;
   }
-  
-   if (
-  location.pathname === "/platform" ||
-  location.pathname === "/summary" ||
-  location.pathname === "/resources" ||
-  location.pathname === "/demo" ||
-  location.pathname.startsWith("/platform") ||
-  location.pathname.startsWith("/employees")
-) {
-  const onPlatform =
-    location.pathname.startsWith("/platform") ||
-    location.pathname.startsWith("/employees");
 
-  if (onPlatform) {
-    navProps = platformProps;
-  } else {
-    navProps = defaultProps;
-  }
-} else {
-  navProps = defaultProps;
-}
-
-
-   const hideButton = onPlatform;
-
-  return <NavBar {...navProps} hideButton={hideButton} />;
-  }
 
 
 
