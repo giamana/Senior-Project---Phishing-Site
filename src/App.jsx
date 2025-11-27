@@ -12,6 +12,7 @@ import SummaryPage from "./views/SummaryPage"
 import WatchDemoPage from "./views/WatchDemoPage"
 import AboutPage from "./views/AboutPage"
 import SignUpPage from "./views/SignUpPage"
+import EmployeeDetailPage from "./views/EmployeeDetailPage"
 
 import React from "react"
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -29,17 +30,33 @@ function NavBarWrapper(){
     return null;
   }
   
-   if (location.pathname === "/platform" || location.pathname === "/summary" || location.pathname === "/resources" || location.pathname === "/demo"){
-    navProps = platformProps;
-   }else{
-    navProps = defaultProps;
-   }
+   if (
+  location.pathname === "/platform" ||
+  location.pathname === "/summary" ||
+  location.pathname === "/resources" ||
+  location.pathname === "/demo" ||
+  location.pathname.startsWith("/platform") ||
+  location.pathname.startsWith("/employees")
+) {
+  const onPlatform =
+    location.pathname.startsWith("/platform") ||
+    location.pathname.startsWith("/employees");
 
-   const hideButton = location.pathname === "/platform";
+  if (onPlatform) {
+    navProps = platformProps;
+  } else {
+    navProps = defaultProps;
+  }
+} else {
+  navProps = defaultProps;
+}
+
+
+   const hideButton = onPlatform;
 
   return <NavBar {...navProps} hideButton={hideButton} />;
+  }
 
-}
 
 
 function App() {
@@ -52,6 +69,7 @@ function App() {
            <Route path="/about" element={<AboutPage />} />
            <Route path="/login" element={<LoginPage />} />
            <Route path="/platform" element={<PlatformPage />} />
+           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
            <Route path="/resources" element={<ResourcesPage />} />
            <Route path="/summary" element={<SummaryPage />} />
            <Route path="/demo" element={<WatchDemoPage />} />
@@ -61,4 +79,4 @@ function App() {
   );
 }
 
-export default App
+export default App;
