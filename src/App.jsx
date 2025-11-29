@@ -8,11 +8,12 @@ import HomePage from "./views/HomePage"
 import LoginPage from "./views/LoginPage"
 import PlatformPage from "./views/PlatformPage"
 import ResourcesPage from "./views/ResourcesPage"
-import SummaryPage from "./views/SummaryPage"
 import WatchDemoPage from "./views/WatchDemoPage"
 import AboutPage from "./views/AboutPage"
 import SignUpPage from "./views/SignUpPage"
 import EmployeeDetailPage from "./views/EmployeeDetailPage"
+import HighestRisks from "./views/HighestRisks"
+import LowestRisks from "./views/LowestRisks"
 
 import React from "react"
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -38,8 +39,9 @@ function NavBarWrapper() {
     // Define onPlatform upfront
     const onPlatform =
       location.pathname === "/platform" ||
-      location.pathname === "/summary" ||
       location.pathname === "/resources" ||
+      location.pathname === "/highest" ||
+      location.pathname === "/lowest" ||
       location.pathname === "/demo" ||
       location.pathname.startsWith("/platform") ||
       location.pathname.startsWith("/employees");
@@ -70,9 +72,10 @@ function App() {
            <Route path="/platform" element={<PlatformPage />} />
            <Route path="/employees/:id" element={<EmployeeDetailPage />} />
            <Route path="/resources" element={<ResourcesPage />} />
-           <Route path="/summary" element={<SummaryPage />} />
            <Route path="/demo" element={<WatchDemoPage />} />
            <Route path="/signUp" element={<SignUpPage />} />
+           <Route path="/highest" element={<HighestRisks />} />
+           <Route path="/lowest" element={<LowestRisks/>} />
         </Routes>
     </BrowserRouter>
   );

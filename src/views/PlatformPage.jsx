@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import ApexCharts from "apexcharts";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../api/client";
 
@@ -47,8 +49,10 @@ function PlatformPage() {
   const [employerId, setEmployerId] = useState(
     localStorage.getItem(EMPLOYER_ID_KEY) || localStorage.getItem("employerId") || null
   );
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+  const navigate = useNavigate();
 
-  // ------------------- INITIALIZATION -------------------
   useEffect(() => {
     const bootstrap = async () => {
       const savedTemplates = localStorage.getItem(SELECTED_TEMPLATES_KEY);
@@ -84,7 +88,47 @@ function PlatformPage() {
     bootstrap();
   }, []);
 
-  // ------------------- FETCHING DATA -------------------
+  useEffect(() => {
+      // Rebuild the engagement chart whenever summary data changes.
+      if (!chartRef.current || !summary) return;
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
+  
+      const chartData = [
+        Math.round((summary.click_rate || 0) * 100),
+        Math.round((summary.report_rate || 0) * 100),
+        Math.round((summary.ignore_rate || 0) * 100),
+      ];
+  
+      const chart = new ApexCharts(chartRef.current, {
+        chart: { type: "bar", height: 300, toolbar: { show: false } },
+        series: [{ name: "Rate", data: chartData }],
+        colors: ["#0f172a"],
+        plotOptions: { bar: { columnWidth: "45%", distributed: true } },
+        dataLabels: {
+          enabled: true,
+          formatter: (val) => `${val}%`,
+          style: { colors: ["#111827"] },
+        },
+        xaxis: {
+          categories: ["Click Rate", "Report Rate", "Ignore Rate"],
+          labels: { style: { fontSize: "12px" } },
+        },
+        yaxis: {
+          labels: {
+            formatter: (val) => `${val}%`,
+          },
+          max: 100,
+        },
+        grid: { strokeDashArray: 5 },
+      });
+  
+      chart.render();
+      chartInstance.current = chart;
+      return () => chart.destroy();
+    }, [summary]);
+  
   const fetchEmployees = async () => {
     try {
       const data = await apiGet(
@@ -118,7 +162,6 @@ function PlatformPage() {
     }
   };
 
-  // ------------------- HANDLERS -------------------
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -183,13 +226,13 @@ function PlatformPage() {
     return () => clearInterval(intervalId);
   }, [autoSimActive, selectedTemplates]);
 
-  // ------------------- RENDER -------------------
+
+
   return (
     <div className="min-h-screen bg-gray-50 pt-24 pb-16 px-10 flex">
-      {/* ------------------- SIDEBAR ------------------- */}
       <div className="w-1/5 h-screen fixed bg-gray-100 p-8 flex flex-col justify-between border-r border-gray-200 top-0 left-0">
         <div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2 mt-20">Summary Page</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2 mt-20">Dashboard Page</h2>
           <ul className="space-y-3 text-gray-600 font-medium">
             <li className="p-2 rounded-lg hover:bg-gray-200 hover:text-gray-900 transition-all duration-200 cursor-pointer">
               On this page, you can quickly see how each employee is performing in your phishing training. It highlights who has the highest and lowest fail rates, along with their click rate, accuracy, and overall performance. These metrics help you understand who’s improving, who needs support, and how your team is doing as a whole.
@@ -202,22 +245,29 @@ function PlatformPage() {
         </ul>
       </div>
 
-      {/* ------------------- MAIN CONTENT ------------------- */}
       <div className="ml-[22%] flex-1 flex flex-col gap-10">
-        {/* Status Bar */}
+        <div className="flex justify-between items-center">
+        <div>
+          <p className="text-gray-500">Your Dashboard</p>
+          <h1 className="text-4xl font-bold">Welcome back, Admin</h1>
+        </div>
         {statusMessage && (
-          <div className={`px-4 py-2 rounded-md text-sm ${
-            statusVariant === "success" ? "bg-emerald-100 text-emerald-800" :
-            statusVariant === "error" ? "bg-red-100 text-red-700" :
-            "bg-blue-100 text-blue-800"
-          }`}>
+          <div
+            className={`px-4 py-2 rounded-md text-sm ${
+              statusVariant === "success"
+                ? "bg-emerald-100 text-emerald-800"
+                : statusVariant === "error"
+                ? "bg-red-100 text-red-700"
+                : "bg-blue-100 text-blue-800"
+            }`}
+          >
             {statusMessage}
           </div>
         )}
+      </div>
 
-        {/* Top Stats */}
         {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
               <p className="text-gray-500 text-sm mb-1">Overall Score</p>
               <p className="text-3xl font-semibold">{summary.score}</p>
@@ -241,8 +291,7 @@ function PlatformPage() {
           </div>
         )}
 
-        {/* Employees Table */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-10">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Employee Performance</h2>
             <div className="flex items-center gap-3 text-sm text-gray-500">
@@ -291,135 +340,277 @@ function PlatformPage() {
           </div>
         </div>
 
-        {/* Templates Section */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-10">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Simulation Templates</h2>
-            <div className="flex gap-3">
-              <button onClick={handleSelectAll} className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200">Select All</button>
-              <button onClick={handleClearAll} className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Clear All</button>
+        
+          
+          
+          <div className="flex flex-row gap-5">
+            <div className="space-y-8">
+              <div className="flex-[1] bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                <h2 className="text-xl font-semibold mb-4">Add Employee</h2>
+                <form className="space-y-4" onSubmit={handleAddEmployee}>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-indigo-100"
+                      placeholder="Gianna Garcia"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      Corporate Email
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-indigo-100"
+                      placeholder="gianna.garcia@company.com"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      Department
+                    </label>
+                    <select
+                      name="department"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-indigo-100 bg-white"
+                      required
+                    >
+                      <option value="" disabled>
+                        Select a department
+                      </option>
+                      {DEPARTMENTS.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full bg-black text-white py-2 rounded-lg font-semibold hover:bg-gray-800 disabled:opacity-60"
+                  >
+                    {submitting ? "Saving..." : "Add Employee"}
+                  </button>
+                </form>
+              </div>
+              </div>
+            
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm w-full">
+              <h2 className="text-xl font-semibold mb-4">Engagement Snapshot</h2>
+              <div ref={chartRef} />
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {templates.map((template) => (
-              <button
-                key={template.id}
-                onClick={() => toggleTemplate(template.id)}
-                className={`p-3 border rounded-xl text-sm font-medium transition-all duration-150 ${
-                  selectedTemplates.includes(template.id)
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-                }`}
-              >
-                {template.name}
-              </button>
-            ))}
-          </div>
 
-          <div className="mt-4 flex gap-3">
-            <button
-              onClick={() => handleRunSimulation()}
-              disabled={selectedTemplates.length === 0 || runningSimulation}
-              className={`px-4 py-2 rounded-lg text-white font-semibold transition-all duration-150 ${
-                selectedTemplates.length === 0 || runningSimulation
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700"
-              }`}
-            >
-              {runningSimulation ? "Running Simulation..." : "Run Simulation"}
-            </button>
-
-            <button
-              onClick={autoSimActive ? stopAutoSim : startAutoSim}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 ${
-                autoSimActive ? "bg-red-600 hover:bg-red-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
-            >
-              {autoSimActive ? "Stop Auto Simulation" : "Start Auto Simulation"}
-            </button>
-          </div>
-        </div>
-
-        {/* Add Employee Form */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-10 w-full max-w-md">
-          <h2 className="text-xl font-semibold mb-4">Add Employee</h2>
-          <form onSubmit={handleAddEmployee} className="space-y-4">
-            <input
-              type="text"
-              name="name"
-              placeholder="Full Name"
-              value={formData.name}
-              onChange={handleInputChange}
-              className="w-full border px-3 py-2 rounded-lg"
-              required
-            />
-            <input
-              type="email"
-              name="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleInputChange}
-              className="w-full border px-3 py-2 rounded-lg"
-              required
-            />
-            <select
-              name="department"
-              value={formData.department}
-              onChange={handleInputChange}
-              className="w-full border px-3 py-2 rounded-lg"
-              required
-            >
-              <option value="">Select Department</option>
-              {DEPARTMENTS.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              disabled={submitting}
-              className={`w-full py-2 rounded-lg font-semibold text-white transition-all duration-150 ${
-                submitting ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              {submitting ? "Adding..." : "Add Employee"}
-            </button>
-          </form>
-        </div>
-
-        {/* Highest / Lowest Risks Tables */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Highest Risk Employees</h2>
-            <ul className="space-y-2">
-              {employees
-                .sort((a, b) => b.metrics.click_rate - a.metrics.click_rate)
-                .slice(0, 5)
-                .map((emp) => (
-                  <li key={emp.id} className="flex justify-between">
-                    <span>{emp.name}</span>
-                    <span>{formatPercent(emp.metrics.click_rate)}</span>
-                  </li>
+          <div className=" bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Template Library</h2>
+                  <p className="text-sm text-gray-500">
+                    Select the templates you want to include in the next
+                    simulation run.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-gray-500">
+                  <span>{selectedTemplates.length} selected</span>
+                  <button
+                    type="button"
+                    className="text-indigo-600 hover:underline font-semibold"
+                    onClick={handleSelectAll}
+                    disabled={templates.length === 0}
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    className="text-gray-500 hover:underline"
+                    onClick={handleClearAll}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4 max-h-80 overflow-y-auto pr-2">
+                {templates.map((template) => (
+                  <label
+                    key={template.id}
+                    className={`border rounded-lg p-4 flex flex-col cursor-pointer transition ${
+                      selectedTemplates.includes(template.id)
+                        ? "border-indigo-500 bg-indigo-50"
+                        : "border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {template.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {template.subject}
+                        </p>
+                      </div>
+                      <span className="text-xs uppercase tracking-wide text-gray-500">
+                        {template.difficulty}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>
+                        {template.department ? template.department : "All Teams"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 text-indigo-600"
+                        checked={selectedTemplates.includes(template.id)}
+                        onChange={() => toggleTemplate(template.id)}
+                      />
+                    </div>
+                  </label>
                 ))}
-            </ul>
+                {templates.length === 0 && (
+                  <p className="text-gray-500 text-sm">
+                    No templates found. Use the backend seeding script to load the
+                    default phishing templates.
+                  </p>
+                )}
+              </div>
+            </div>
+
+       <div className="flex flex-row">
+          <div className="w-full max-w-lg p-4 border border-gray-200 rounded-lg shadow-sm sm:p-8 bg-white">
+
+            <div className="flex items-center justify-between mb-4">
+              <h5 className="text-xl font-bold leading-none text-gray-900">Highest Risks</h5>
+              <a href="#" onClick={(e) => {e.preventDefault(); navigate("/highest");}}className="text-sm font-medium text-indigo-600 hover:underline">
+              View all
+            </a>
+            </div>
+
+            <div className="w-full">
+              <hr className="text-neutral-300"/>
+
+              <div className="grid grid-cols-[1.5fr_1fr_0.7fr] bg-gray-100 p-3 rounded-t-lg font-semibold text-gray-700">
+                <p>Employee Email</p>
+                <p>Full Name</p>
+                <p>Failures</p>
+              </div>
+
+                  <ul role="list" className="divide-y divide-gray-200">
+                {Array.isArray(employees) && employees.length > 0 ? (
+                  employees
+                    .sort((a, b) => {
+                      const aRate = a?.metrics?.click_rate ?? 0;
+                      const bRate = b?.metrics?.click_rate ?? 0;
+                      return bRate - aRate; 
+                    })
+                    .slice(0, 5)
+                    .map((emp, i) => {
+                      const failures =
+                        emp?.failures ??
+                        emp?.metrics?.failures ??
+                        (typeof emp?.metrics?.click_rate === "number"
+                          ? Math.round(emp.metrics.click_rate * 100)
+                          : 0);
+
+                      return (
+                        <li
+                          key={emp?.id ?? `emp-${i}`}
+                          className={`grid grid-cols-[1.5fr_1fr_0.7fr] items-center p-3 hover:bg-gray-50 transition-all duration-150 border-y border-neutral-300 ${
+                            i % 2 === 0 ? "bg-white" : "bg-neutral-100"
+                          }`}
+                        >
+                          <p className="text-xs text-gray-700">{emp?.email ?? "—"}</p>
+                          <p className="text-xs font-medium text-gray-900">{emp?.name ?? "—"}</p>
+                          <p className="text-xs text-gray-700 mx-5">{failures}</p>
+                        </li>
+                      );
+                    })
+                ) : (
+                  <li className="p-3 text-sm text-gray-500">No employees available</li>
+                )}
+              </ul>
+            </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Lowest Risk Employees</h2>
-            <ul className="space-y-2">
-              {employees
-                .sort((a, b) => a.metrics.click_rate - b.metrics.click_rate)
-                .slice(0, 5)
-                .map((emp) => (
-                  <li key={emp.id} className="flex justify-between">
-                    <span>{emp.name}</span>
-                    <span>{formatPercent(emp.metrics.click_rate)}</span>
-                  </li>
-                ))}
-            </ul>
+
+          <div className="w-full max-w-lg p-4 border border-gray-200 rounded-lg shadow-sm sm:p-8 bg-white mx-10">
+
+            <div className="flex items-center justify-between mb-4">
+              <h5 className="text-xl font-bold leading-none text-gray-900">Lowest Risks</h5>
+              <a href="#" onClick={(e) => {e.preventDefault(); navigate("/lowest");}}className="text-sm font-medium text-indigo-600 hover:underline">View all</a>
+            </div>
+
+            <div className="w-full">
+              <hr className="text-neutral-300" />
+
+              <div className="grid grid-cols-2 bg-gray-100 p-3 rounded-t-lg font-semibold text-gray-700 text-center">
+                <p>Employee Email</p>
+                <p>Full Name</p>
+              </div>
+
+              <ul role="list" className="divide-y divide-gray-200">
+                {Array.isArray(employees) && employees.length > 0 ? (
+                  employees
+                    .sort((a, b) => {
+                      const aRate = a?.metrics?.click_rate ?? 0;
+                      const bRate = b?.metrics?.click_rate ?? 0;
+                      return aRate - bRate; 
+                    })
+                    .slice(0, 5)
+                    .map((emp, i) => {
+                      const failures =
+                        emp?.failures ??
+                        emp?.metrics?.failures ??
+                        (typeof emp?.metrics?.click_rate === "number"
+                          ? Math.round(emp.metrics.click_rate * 100)
+                          : 0);
+
+                      return (
+                        <li
+                          key={emp?.id ?? `emp-${i}`}
+                          className={`grid grid-cols-[1.5fr_1fr_0.7fr] items-center p-3 hover:bg-gray-50 transition-all duration-150 border-y border-neutral-300 ${
+                            i % 2 === 0 ? "bg-white" : "bg-neutral-100"
+                          }`}
+                        >
+                          <p className="text-xs text-gray-700">{emp?.email ?? "—"}</p>
+                          <p className="text-xs font-medium text-gray-900">{emp?.name ?? "—"}</p>
+                          <p className="text-xs text-gray-700 mx-5">{failures}</p>
+                        </li>
+                      );
+                    })
+                ) : (
+                  <li className="p-3 text-sm text-gray-500">No employees available</li>
+                )}
+              </ul>
+            </div>
           </div>
+
         </div>
 
+        <button
+        className="fixed bottom-8 right-8 bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60"
+        onClick={() => handleRunSimulation()}
+        disabled={runningSimulation || selectedTemplates.length === 0}
+      >
+        {runningSimulation ? "Running..." : "Run Simulation"}
+      </button>
+      <button
+        className="fixed bottom-8 right-48 bg-gray-200 hover:bg-gray-300 text-gray-900 px-6 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60"
+        onClick={autoSimActive ? stopAutoSim : startAutoSim}
+        disabled={selectedTemplates.length === 0}
+      >
+        {autoSimActive ? "Stop Auto Simulation" : "Start Auto Simulation"}
+      </button>
       </div>
     </div>
   );
