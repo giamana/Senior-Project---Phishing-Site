@@ -1,3 +1,4 @@
+import html
 import os
 import re
 import uuid
@@ -35,23 +36,33 @@ def build_tracking_url(token: str, action: Optional[str] = None) -> str:
 
 def render_body_with_tracking_links(body: str, click_url: str, report_url: str) -> str:
     """
-    Replace the first [Call To Action] placeholder in the template body with the
-    click tracking URL and append a reporting link at the bottom.
+    Replace the first [Call To Action] (or any [label]) with an HTML anchor so
+    the CTA text stays visible while the URL is hidden behind the link. Appends
+    a reporting link at the bottom. Returns HTML.
     """
 
-    def _replacement(match: re.Match[str]) -> str:
-        label = match.group(1)
-        return f"{label} ({click_url})"
+    def _anchor(label: str, url: str) -> str:
+        safe_label = html.escape(label)
+        safe_url = html.escape(url, quote=True)
+        return f'<a href="{safe_url}">{safe_label}</a>'
 
-    # Prefer an explicit [Call To Action] placeholder; otherwise fall back to any [label].
-    updated_body, count = _CTA_PATTERN.subn(
-        f"[Call To Action] ({click_url})", body, count=1
-    )
+    # Mark the CTA position, then escape the rest of the body so only the anchor renders as HTML.
+    marker = "__CTA__"
+    chosen_label = "Call To Action"
+
+    marked_body, count = _CTA_PATTERN.subn(marker, body, count=1)
     if count == 0:
-        updated_body, count = _PLACEHOLDER_PATTERN.subn(_replacement, body, count=1)
+        def _mark_placeholder(match: re.Match[str]) -> str:
+            nonlocal chosen_label
+            chosen_label = match.group(1)
+            return marker
+        marked_body, count = _PLACEHOLDER_PATTERN.subn(_mark_placeholder, body, count=1)
 
     if count == 0:
-        updated_body = f"{body.strip()}\n\nAccess the requested resource: {click_url}"
+        marked_body = f"{body.strip()}\n\n{marker}"
 
-    updated_body = updated_body.rstrip() + f"\n\nReport this email: {report_url}"
-    return updated_body
+    escaped_body = html.escape(marked_body)
+    with_cta = escaped_body.replace(marker, _anchor(chosen_label, click_url), 1)
+
+    with_report = with_cta.rstrip() + f"<br><br>{_anchor('Report this email', report_url)}"
+    return with_report.replace("\n", "<br>")
