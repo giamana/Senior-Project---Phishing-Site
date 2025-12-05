@@ -1,83 +1,97 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from passlib.context import CryptContext
-from jose import jwt
 from datetime import datetime, timedelta
-from .schemas import SignupRequest, LoginRequest, TokenResponse, MessageResponse
-from .models import User, Company
-from .database import get_db
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends
+from jose import jwt
+from passlib.context import CryptContext
+from sqlalchemy.orm import Session
 
+from .database import get_db
+from .models import User, Role, Company, Employee
+from .schemas import SignupBody, LoginBody, UserOut, TokenOut
+
+SECRET_KEY = "CHANGE_ME_SUPER_SECRET_KEY"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12
+
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 router = APIRouter()
 
-# bcrypt context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
 
-# Config (use environment variables in production!)
-SECRET_KEY = "your_secret_key"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+def hash_password(plain: str) -> str:
+    return pwd_context.hash(plain)
 
-
-# ---------------- Password Helpers ----------------
-def hash_password(password: str) -> str:
-    # Ensure it's a string and truncate to 72 characters
-    password_str = str(password)
-    return pwd_context.hash(password_str[:72])
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    plain_str = str(plain_password)
-    return pwd_context.verify(plain_str[:72], hashed_password)
-
-
-# ---------------- JWT Helpers ----------------
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+@router.post("/signup", response_model=TokenOut)
+def signup(body: SignupBody, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == body.email.lower()).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already exists")
 
-# ---------------- Routes ----------------
-@router.post("/signup", response_model=MessageResponse)
-def signup(data: SignupRequest, db: Session = Depends(get_db)):
-    # Check if email already exists
-    if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    # Hash password
-    hashed_pw = hash_password(data.password)
-
-    # Handle company creation/association
-    company = None
-    if data.company_name:
-        existing_company = db.query(Company).filter(Company.name == data.company_name).first()
-        if not existing_company:
-            company = Company(name=data.company_name)
-            db.add(company)
-            db.flush()  # ensures company.id is available
-        else:
-            company = existing_company
-
-    # Create user
+    normalized_role = Role(body.role.lower())
     user = User(
-        name=data.name,
-        email=data.email,
-        password_hash=hashed_pw,
-        role=data.role,
-        company_id=company.id if company else None,
+        first_name=body.first_name,
+        last_name=body.last_name or "",
+        email=body.email.lower(),
+        role=normalized_role,
+        hashed_password=hash_password(body.password),
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    return {"message": "User created successfully", "id": user.id, "role": user.role}
+    if user.role == Role.employer and body.companyName:
+        company = Company(name=body.companyName, employer=user)
+        db.add(company)
+        db.commit()
+        db.refresh(company)
 
+    if user.role == Role.employee:
+        emp = Employee(user_id=user.id, employer_id=None, company_id=None)
+        db.add(emp)
+        db.commit()
+        db.refresh(emp)
 
-@router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user or not verify_password(data.password, user.password_hash):
+    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    return TokenOut(
+        token=token,
+        user=UserOut(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            role=user.role.value,
+            companyId=user.company.id if user.company else None,
+            companyName=user.company.name if user.company else None,
+        ),
+    )
+
+@router.post("/login", response_model=TokenOut)
+def login(body: LoginBody, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email.lower()).first()
+    if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token({"sub": user.email, "role": user.role})
-    return {"access_token": token, "role": user.role}
+    if pwd_context.needs_update(user.hashed_password):
+        user.hashed_password = hash_password(body.password)
+        db.add(user)
+        db.commit()
+    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    return TokenOut(
+        token=token,
+        user=UserOut(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            role=user.role.value,
+            companyId=user.company.id if user.company else None,
+            companyName=user.company.name if user.company else None,
+        ),
+    )

@@ -1,49 +1,57 @@
-// src/auth/AuthProvider.jsx
-import React, { createContext, useContext, useEffect, useState } from "react";
 
-export const AuthContext = createContext();
+// src/auth/AuthProvider.jsx
+import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
-  const [role, setRole] = useState(null);
+  const [auth, setAuth] = useState(() => {
+    // Bootstrap from localStorage on initial render
+    try {
+      const token = localStorage.getItem("token") || null;
+      const role = localStorage.getItem("role") || null;
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return token ? { token, role, user } : { token: null, role: null, user: null };
+    } catch {
+      return { token: null, role: null, user: null };
+    }
+  });
 
+  // Keep context in sync with localStorage changes (optional)
   useEffect(() => {
-    const t = localStorage.getItem("token");
-    const r = localStorage.getItem("role");
-    if (t) setToken(t);
-    if (r) setRole(r);
+    const handler = () => {
+      try {
+        const token = localStorage.getItem("token") || null;
+        const role = localStorage.getItem("role") || null;
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        setAuth(token ? { token, role, user } : { token: null, role: null, user: null });
+      } catch {}
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
   }, []);
 
-  const login = (newToken, newRole) => {
-    setToken(newToken);
-    setRole(newRole);
-    localStorage.setItem("token", newToken);
-    localStorage.setItem("role", newRole);
+  const login = (token, role, userObj) => {
+    localStorage.setItem("token", token);
+    if (role) localStorage.setItem("role", (role || "").toLowerCase());
+    if (userObj) localStorage.setItem("user", JSON.stringify(userObj));
+    setAuth({
+      token,
+      role: (role || "").toLowerCase(),
+      user: userObj || (JSON.parse(localStorage.getItem("user") || "{}") || null),
+    });
   };
 
   const logout = () => {
-    setToken(null);
-    setRole(null);
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("user");
+    setAuth({ token: null, role: null, user: null });
   };
 
-  const isAuthenticated = !!token;
+  const value = useMemo(() => ({ ...auth, login, logout }), [auth]);
 
-  const authFetch = async (url, options = {}) => {
-    const headers = {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-      "Content-Type": options.body ? "application/json" : (options.headers || {})["Content-Type"],
-    };
-    return fetch(url, { ...options, headers });
-  };
-
-  return (
-    <AuthContext.Provider value={{ token, role, login, logout, isAuthenticated, authFetch }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

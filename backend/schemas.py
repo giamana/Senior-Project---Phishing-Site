@@ -1,29 +1,68 @@
-from pydantic import BaseModel, EmailStr, constr
-from typing import Optional, List, Literal
+from typing import Optional
+from pydantic import BaseModel, EmailStr
 
-class SignupRequest(BaseModel):
-    name: constr(strip_whitespace=True, min_length=2, max_length=100)
+# ---------- Auth ----------
+class SignupBody(BaseModel):
     email: EmailStr
-    password: constr(min_length=6, max_length=72)
-    role: Literal["employee", "employer", "developer"]
-    company_name: Optional[constr(strip_whitespace=True, max_length=100)] = None
+    password: str
+    first_name: str
+    last_name: Optional[str] = None
+    role: str
+    companyName: Optional[str] = None
 
-class LoginRequest(BaseModel):
+class LoginBody(BaseModel):
     email: EmailStr
-    password: constr(min_length=6, max_length=72)
+    password: str
 
-class TokenResponse(BaseModel):
-    access_token: str
-    role: Literal["employee", "employer", "developer"]
+class UserOut(BaseModel):
+    id: int
+    first_name: str
+    last_name: Optional[str] = None
+    email: EmailStr
+    role: str
+    companyId: Optional[int] = None
+    companyName: Optional[str] = None
 
-class MessageResponse(BaseModel):
-    message: str
-    id: Optional[int] = None
-    role: Optional[str] = None
+class TokenOut(BaseModel):
+    token: str
+    user: UserOut
 
-class SimulationCreate(BaseModel):
+# ---------- Employee / Employer ----------
+class EmployeeCreate(BaseModel):
+    first_name: str
+    last_name: Optional[str] = None
+    email: EmailStr
+
+class EmployeeRow(BaseModel):
+    id: int
+    userId: int
+    first_name: str
+    last_name: Optional[str] = None
+    emailsSent: int
+    urlsClicked: int
+
+class EmployerStatsOut(BaseModel):
+    totalEmployees: int
+    totalEmailsSent: int
+    totalUrlsClicked: int
+
+# ---------- Email ----------
+class EmailCreate(BaseModel):
     subject: str
-    content: str
+    body: str
+    recipient_employee_id: int
 
-class AssignRecipients(BaseModel):
-    recipient_ids: List[int]
+# ---------- Company / Global ----------
+class CompanyRow(BaseModel):
+    id: int
+    name: str
+    employerId: Optional[int] = None
+
+class GlobalStatsOut(BaseModel):
+    totalCompanies: int
+    totalEmployees: int
+    totalEmailsSent: int
+    totalUrlsClicked: int
+
+# ---------- Compatibility aliases ----------
+EmployeeStatsOut = EmployerStatsOut
