@@ -100,7 +100,7 @@ CREATE TABLE email_templates (
     template_name TEXT NOT NULL,
     subject TEXT NOT NULL,
     body TEXT NOT NULL,
-    difficulty_level TEXT CHECK(difficulty_level IN ('easy', 'medium', 'hard')),
+    difficulty_level TEXT CHECK(difficulty_level IN ('easy', 'medium', 'hard', 'complex','complex+')),
     target_department TEXT,
     red_flags TEXT,
     is_phishing BOOLEAN NOT NULL DEFAULT 1,

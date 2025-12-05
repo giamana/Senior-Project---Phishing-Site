@@ -1,5 +1,5 @@
 import ApexCharts from "apexcharts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../api/client";
@@ -21,6 +21,8 @@ const DEPARTMENTS = [
   "HR",
   "IT Support",
   "Pilot Operations",
+  "Training & Development",
+  "Student/Early Career",
 ];
 
 const statusPillStyles = {
@@ -35,6 +37,9 @@ function formatPercent(value) {
   return `${Math.round(value * 100)}%`;
 }
 
+const getEmployeeCacheKey = (employerId) =>
+  employerId ? `${EMPLOYEE_CACHE_KEY}_${employerId}` : null;
+
 function PlatformPage() {
   const [employees, setEmployees] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -46,9 +51,11 @@ function PlatformPage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [statusVariant, setStatusVariant] = useState("info");
   const [autoSimActive, setAutoSimActive] = useState(false);
+  const [sendingMetrics, setSendingMetrics] = useState(false);
   const [employerId, setEmployerId] = useState(
     localStorage.getItem(EMPLOYER_ID_KEY) || localStorage.getItem("employerId") || null
   );
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
   const navigate = useNavigate();
@@ -63,15 +70,22 @@ function PlatformPage() {
           console.warn("Unable to parse cached selected templates", e);
         }
       }
-      const savedEmployees = localStorage.getItem(EMPLOYEE_CACHE_KEY);
-      if (savedEmployees) {
-        try {
-          const cached = JSON.parse(savedEmployees);
-          setEmployees(cached.employees || []);
-          setSummary(cached.summary || null);
-        } catch (e) {
-          console.warn("Unable to parse cached employees", e);
+      const initialCacheKey = getEmployeeCacheKey(
+        localStorage.getItem(EMPLOYER_ID_KEY) || localStorage.getItem("employerId")
+      );
+      if (initialCacheKey) {
+        const savedEmployees = localStorage.getItem(initialCacheKey);
+        if (savedEmployees) {
+          try {
+            const cached = JSON.parse(savedEmployees);
+            setEmployees(cached.employees || []);
+            setSummary(cached.summary || null);
+          } catch (e) {
+            console.warn("Unable to parse cached employees", e);
+          }
         }
+      } else {
+        localStorage.removeItem(EMPLOYEE_CACHE_KEY);
       }
       const savedAutoSim = localStorage.getItem(AUTO_SIM_KEY);
       if (savedAutoSim) setAutoSimActive(savedAutoSim === "true");
@@ -81,8 +95,8 @@ function PlatformPage() {
       } catch (err) {
         console.warn("Unable to auto-mark ignored simulations", err);
       }
-      fetchEmployees();
       fetchTemplates();
+      fetchEmployees();
     };
 
     bootstrap();
@@ -129,24 +143,42 @@ function PlatformPage() {
       return () => chart.destroy();
     }, [summary]);
   
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (targetEmployerId = employerId) => {
+    const activeEmployerId = targetEmployerId || employerId;
+    if (!activeEmployerId) {
+      try {
+        const data = await apiGet("/api/employees");
+        const employerIds = Array.from(
+          new Set((data.employees || []).map((emp) => emp.employer_id).filter((id) => id !== null && id !== undefined))
+        );
+        if (employerIds.length === 1) {
+          setEmployerId(String(employerIds[0]));
+          return;
+        }
+      } catch (err) {
+        console.warn("Unable to derive employer id from employees list", err);
+      }
+      setEmployees([]);
+      setSummary(null);
+      setStatusVariant("error");
+      setStatusMessage("Employer not set; please log in again to load employees.");
+      return;
+    }
     try {
-      const data = await apiGet(
-        employerId ? `/api/employees?employerId=${employerId}` : "/api/employees"
-      );
+      const data = await apiGet(`/api/employees?employerId=${activeEmployerId}`);
       setEmployees(data.employees || []);
       setSummary(data.summary || null);
-      if (!employerId && data.employees && data.employees.length > 0) {
-        const derived = data.employees[0].employer_id;
-        if (derived !== undefined && derived !== null) {
-          setEmployerId(String(derived));
-          localStorage.setItem(EMPLOYER_ID_KEY, String(derived));
-        }
+      if (!employerId && activeEmployerId) {
+        setEmployerId(String(activeEmployerId));
+        localStorage.setItem(EMPLOYER_ID_KEY, String(activeEmployerId));
       }
-      localStorage.setItem(
-        EMPLOYEE_CACHE_KEY,
-        JSON.stringify({ employees: data.employees || [], summary: data.summary || null })
-      );
+      const cacheKey = getEmployeeCacheKey(activeEmployerId);
+      if (cacheKey) {
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({ employees: data.employees || [], summary: data.summary || null })
+        );
+      }
     } catch (err) {
       setStatusVariant("error");
       setStatusMessage(`Failed to load employees: ${err.message}`);
@@ -188,6 +220,10 @@ function PlatformPage() {
 
   const handleSelectAll = () => setSelectedTemplates(templates.map((t) => t.id));
   const handleClearAll = () => setSelectedTemplates([]);
+  const handleSelectDifficulty = (level) => {
+    const matching = templates.filter((t) => t.difficulty === level).map((t) => t.id);
+    setSelectedTemplates(matching);
+  };
 
   const handleDeleteAllEmployees = async () => {
     const confirmed = window.confirm("Delete all employees? This cannot be undone.");
@@ -197,10 +233,59 @@ function PlatformPage() {
       if (!effectiveEmployerId) { setStatusVariant("error"); setStatusMessage("Employer ID missing; cannot delete employees."); return; }
       const result = await apiPost("/api/employees/delete_all", { employerId: effectiveEmployerId });
       setEmployees([]); setSummary(null);
-      localStorage.setItem(EMPLOYEE_CACHE_KEY, JSON.stringify({ employees: [], summary: null }));
+      const cacheKey = getEmployeeCacheKey(effectiveEmployerId);
+      if (cacheKey) {
+        localStorage.setItem(cacheKey, JSON.stringify({ employees: [], summary: null }));
+      }
       setStatusVariant("success"); setStatusMessage(`Deleted ${result.deleted || 0} employees.`);
     } catch (err) {
       setStatusVariant("error"); setStatusMessage(`Failed to delete employees: ${err.message}`);
+    }
+  };
+
+  const handleDeleteEmployee = async (employeeId) => {
+    const confirmed = window.confirm("Delete this employee?");
+    if (!confirmed) return;
+    try {
+      await apiPost(`/api/employees/${employeeId}/delete`, employerId ? { employerId } : {});
+      setStatusVariant("success");
+      setStatusMessage("Employee deleted.");
+      fetchEmployees();
+    } catch (err) {
+      setStatusVariant("error");
+      setStatusMessage(`Failed to delete employee: ${err.message}`);
+    }
+  };
+
+  const handleSendMetricsEmails = async () => {
+    if (!employerId) {
+      setStatusVariant("error");
+      setStatusMessage("Employer not set; cannot send metrics emails.");
+      return;
+    }
+    if (!employees || employees.length === 0) {
+      setStatusVariant("error");
+      setStatusMessage("No employees to email.");
+      return;
+    }
+    setSendingMetrics(true);
+    try {
+      const response = await apiPost("/api/employees/send_metrics", {
+        employerId,
+        baseUrl: window.location.origin,
+      });
+      setStatusVariant("success");
+      const errorCount = (response.errors && response.errors.length) || 0;
+      if (errorCount > 0) {
+        setStatusMessage(`Sent ${response.sent || 0} metrics emails; ${errorCount} failed.`);
+      } else {
+        setStatusMessage(`Sent ${response.sent || 0} metrics emails.`);
+      }
+    } catch (err) {
+      setStatusVariant("error");
+      setStatusMessage(`Failed to send metrics emails: ${err.message}`);
+    } finally {
+      setSendingMetrics(false);
     }
   };
 
@@ -225,6 +310,97 @@ function PlatformPage() {
     const intervalId = setInterval(() => { if (selectedTemplates.length > 0) handleRunSimulation({ silent: true, auto: true }); }, 60_000);
     return () => clearInterval(intervalId);
   }, [autoSimActive, selectedTemplates]);
+
+  useEffect(() => {
+    const cacheKey = getEmployeeCacheKey(employerId);
+    if (!employerId) {
+      setEmployees([]);
+      setSummary(null);
+      return;
+    }
+
+    if (cacheKey) {
+      const saved = localStorage.getItem(cacheKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setEmployees(parsed.employees || []);
+          setSummary(parsed.summary || null);
+          return;
+        } catch (e) {
+          console.warn("Unable to parse cached employees", e);
+        }
+      }
+    }
+
+    fetchEmployees(employerId);
+  }, [employerId]);
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: "asc" };
+    });
+  };
+
+  const getRateValue = (employee, rateKey) => {
+    const value = employee?.metrics?.[rateKey];
+    return typeof value === "number" ? value : 0;
+  };
+
+  const sortedEmployees = useMemo(() => {
+    if (!Array.isArray(employees)) return [];
+    if (!sortConfig.key) return [...employees];
+
+    const list = [...employees];
+    const direction = sortConfig.direction === "asc" ? 1 : -1;
+
+    list.sort((a, b) => {
+      let aVal;
+      let bVal;
+
+      switch (sortConfig.key) {
+        case "name":
+          aVal = (a?.name || "").toLowerCase();
+          bVal = (b?.name || "").toLowerCase();
+          return aVal.localeCompare(bVal) * direction;
+        case "department":
+          aVal = (a?.department || "").toLowerCase();
+          bVal = (b?.department || "").toLowerCase();
+          return aVal.localeCompare(bVal) * direction;
+        case "score":
+          aVal = typeof a?.score === "number" ? a.score : 0;
+          bVal = typeof b?.score === "number" ? b.score : 0;
+          return (aVal - bVal) * direction;
+        case "click_rate":
+        case "report_rate":
+        case "ignore_rate":
+          aVal = getRateValue(a, sortConfig.key);
+          bVal = getRateValue(b, sortConfig.key);
+          return (aVal - bVal) * direction;
+        default:
+          return 0;
+      }
+    });
+
+    return list;
+  }, [employees, sortConfig]);
+
+  const highestRiskEmployees = useMemo(() => {
+    if (!Array.isArray(employees)) return [];
+    return [...employees]
+      .sort((a, b) => getRateValue(b, "click_rate") - getRateValue(a, "click_rate"))
+      .slice(0, 5);
+  }, [employees]);
+
+  const lowestRiskEmployees = useMemo(() => {
+    if (!Array.isArray(employees)) return [];
+    return [...employees]
+      .sort((a, b) => getRateValue(a, "click_rate") - getRateValue(b, "click_rate"))
+      .slice(0, 5);
+  }, [employees]);
 
 
 
@@ -299,23 +475,110 @@ function PlatformPage() {
               <button type="button" className="text-red-600 hover:underline font-semibold" onClick={handleDeleteAllEmployees} disabled={employees.length === 0}>
                 Delete all
               </button>
+              <button
+                type="button"
+                className="text-gray-600 hover:underline font-semibold"
+                onClick={() => fetchEmployees()}
+                disabled={runningSimulation}
+              >
+                Refresh
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-left text-gray-500 uppercase border-b">
                 <tr>
-                  <th className="py-3">Name</th>
-                  <th className="py-3">Department</th>
+                  <th className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("name")}
+                      className="flex items-center gap-2 normal-case font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Name
+                      {sortConfig.key === "name" && (
+                        <span className="text-[10px] text-gray-500">
+                          {sortConfig.direction === "asc" ? "(asc)" : "(desc)"}
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("department")}
+                      className="flex items-center gap-2 normal-case font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Department
+                      {sortConfig.key === "department" && (
+                        <span className="text-[10px] text-gray-500">
+                          {sortConfig.direction === "asc" ? "(asc)" : "(desc)"}
+                        </span>
+                      )}
+                    </button>
+                  </th>
                   <th className="py-3">Status</th>
-                  <th className="py-3">Score</th>
-                  <th className="py-3">Click</th>
-                  <th className="py-3">Report</th>
-                  <th className="py-3">Ignore</th>
+                  <th className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("score")}
+                      className="flex items-center gap-2 normal-case font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Score
+                      {sortConfig.key === "score" && (
+                        <span className="text-[10px] text-gray-500">
+                          {sortConfig.direction === "asc" ? "(asc)" : "(desc)"}
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("click_rate")}
+                      className="flex items-center gap-2 normal-case font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Click
+                      {sortConfig.key === "click_rate" && (
+                        <span className="text-[10px] text-gray-500">
+                          {sortConfig.direction === "asc" ? "(asc)" : "(desc)"}
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("report_rate")}
+                      className="flex items-center gap-2 normal-case font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Report
+                      {sortConfig.key === "report_rate" && (
+                        <span className="text-[10px] text-gray-500">
+                          {sortConfig.direction === "asc" ? "(asc)" : "(desc)"}
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("ignore_rate")}
+                      className="flex items-center gap-2 normal-case font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Ignore
+                      {sortConfig.key === "ignore_rate" && (
+                        <span className="text-[10px] text-gray-500">
+                          {sortConfig.direction === "asc" ? "(asc)" : "(desc)"}
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {employees.map((employee) => (
+                {sortedEmployees.map((employee) => (
                   <tr key={employee.id} className="border-b last:border-none hover:bg-gray-50">
                     <td className="py-3 font-medium text-gray-900">
                       <Link to={`/employees/${employee.id}`} className="text-indigo-600 hover:underline">{employee.name}</Link>
@@ -330,10 +593,19 @@ function PlatformPage() {
                     <td className="py-3">{formatPercent(employee.metrics.click_rate)}</td>
                     <td className="py-3">{formatPercent(employee.metrics.report_rate)}</td>
                     <td className="py-3">{formatPercent(employee.metrics.ignore_rate)}</td>
+                    <td className="py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEmployee(employee.id)}
+                        className="text-red-600 hover:underline font-semibold"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {employees.length === 0 && (
-                  <tr><td colSpan="7" className="text-center text-gray-500 py-6 text-sm">Add employees to begin tracking phishing performance.</td></tr>
+                  <tr><td colSpan="8" className="text-center text-gray-500 py-6 text-sm">Add employees to begin tracking phishing performance.</td></tr>
                 )}
               </tbody>
             </table>
@@ -435,6 +707,46 @@ function PlatformPage() {
                   </button>
                   <button
                     type="button"
+                    className="text-gray-600 hover:underline"
+                    onClick={() => handleSelectDifficulty("easy")}
+                    disabled={templates.length === 0}
+                  >
+                    All easy
+                  </button>
+                  <button
+                    type="button"
+                    className="text-gray-600 hover:underline"
+                    onClick={() => handleSelectDifficulty("medium")}
+                    disabled={templates.length === 0}
+                  >
+                    All medium
+                  </button>
+                  <button
+                    type="button"
+                    className="text-gray-600 hover:underline"
+                    onClick={() => handleSelectDifficulty("hard")}
+                    disabled={templates.length === 0}
+                  >
+                    All hard
+                  </button>
+                  <button
+                    type="button"
+                    className="text-gray-600 hover:underline"
+                    onClick={() => handleSelectDifficulty("complex")}
+                    disabled={templates.length === 0}
+                  >
+                    All complex
+                  </button>
+                  <button
+                    type="button"
+                    className="text-gray-600 hover:underline"
+                    onClick={() => handleSelectDifficulty("complex+")}
+                    disabled={templates.length === 0}
+                  >
+                    All complex+
+                  </button>
+                  <button
+                    type="button"
                     className="text-gray-500 hover:underline"
                     onClick={handleClearAll}
                   >
@@ -508,14 +820,7 @@ function PlatformPage() {
 
                   <ul role="list" className="divide-y divide-gray-200">
                 {Array.isArray(employees) && employees.length > 0 ? (
-                  employees
-                    .sort((a, b) => {
-                      const aRate = a?.metrics?.click_rate ?? 0;
-                      const bRate = b?.metrics?.click_rate ?? 0;
-                      return bRate - aRate; 
-                    })
-                    .slice(0, 5)
-                    .map((emp, i) => {
+                  highestRiskEmployees.map((emp, i) => {
                       const failures =
                         emp?.failures ??
                         emp?.metrics?.failures ??
@@ -560,14 +865,7 @@ function PlatformPage() {
 
               <ul role="list" className="divide-y divide-gray-200">
                 {Array.isArray(employees) && employees.length > 0 ? (
-                  employees
-                    .sort((a, b) => {
-                      const aRate = a?.metrics?.click_rate ?? 0;
-                      const bRate = b?.metrics?.click_rate ?? 0;
-                      return aRate - bRate; 
-                    })
-                    .slice(0, 5)
-                    .map((emp, i) => {
+                  lowestRiskEmployees.map((emp, i) => {
                       const failures =
                         emp?.failures ??
                         emp?.metrics?.failures ??
@@ -595,6 +893,28 @@ function PlatformPage() {
             </div>
           </div>
 
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Share individual metrics</h3>
+              <p className="text-sm text-gray-500">
+                Email each employee a direct link to their personal metrics page.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSendMetricsEmails}
+              disabled={sendingMetrics || employees.length === 0}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-60"
+            >
+              {sendingMetrics ? "Sending..." : "Send metrics emails"}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Uses the current employee list for this employer and sends from the configured SMTP account.
+          </p>
         </div>
 
         <button

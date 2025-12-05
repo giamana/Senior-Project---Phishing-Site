@@ -46,8 +46,10 @@ def send_email(receiver_email, subject, body):
         server.send_message(msg)
         server.quit()
         print(f"[{datetime.now()}] Email sent to {receiver_email}: {subject}")
+        return True
     except Exception as e:
         print(f"[ERROR] Failed to send email to {receiver_email}: {e}")
+        return False
 
 
 def _random_template(cur, allowed_template_ids=None):
@@ -192,16 +194,16 @@ def send_department_emails(allowed_template_ids=None):
         )
 
         # Send email
-        send_email(receiver_email, subject, final_body)
-        deliveries.append(
-            {
-                "simulation_id": simulation_id,
-                "user_id": user_id,
-                "template_id": template_id,
-                "email": receiver_email,
-            }
-        )
-        conn.commit()
+        if send_email(receiver_email, subject, final_body):
+            deliveries.append(
+                {
+                    "simulation_id": simulation_id,
+                    "user_id": user_id,
+                    "template_id": template_id,
+                    "email": receiver_email,
+                }
+            )
+            conn.commit()
 
     conn.close()
     return deliveries

@@ -64,5 +64,16 @@ def render_body_with_tracking_links(body: str, click_url: str, report_url: str) 
     escaped_body = html.escape(marked_body)
     with_cta = escaped_body.replace(marker, _anchor(chosen_label, click_url), 1)
 
-    with_report = with_cta.rstrip() + f"<br><br>{_anchor('Report this email', report_url)}"
+    footer = (
+        '<div style="margin-top:12px; font-size:12px; color:#5f6368; font-weight:400;">'
+        f'<a href="{html.escape(report_url, quote=True)}" '
+        'style="color:#5f6368; text-decoration:none; font-size:12px; font-weight:400;" '
+        'onmouseover="this.style.textDecoration=\'underline\'" '
+        'onmouseout="this.style.textDecoration=\'none\'">'
+        "View security options for this message"
+        "</a>"
+        "</div>"
+    )
+
+    with_report = with_cta.rstrip() + "<br>" + footer
     return with_report.replace("\n", "<br>")

@@ -11,7 +11,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from backend.db.email_scheduler import send_department_emails
+from backend.db.email_scheduler import send_department_emails, send_email
 from backend.db.response_tracker import (
     compute_employer_rollup,
     compute_user_metrics,
@@ -175,9 +175,19 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
             if payload is None:
                 return self._send_json({"error": "Invalid JSON body"}, status=400)
             return self._handle_create_employee(payload)
+        if path.startswith("/api/employees/") and path.endswith("/delete"):
+            trimmed = path[: -len("/delete")]
+            employee_id = self._parse_id("/api/employees/", trimmed)
+            if employee_id is None:
+                return self._send_json({"error": "Invalid employee id"}, status=400)
+            payload = self._read_json() or {}
+            return self._handle_delete_employee(employee_id, payload)
         if path == "/api/employees/delete_all":
             payload = self._read_json() or {}
             return self._handle_delete_employees(payload)
+        if path == "/api/employees/send_metrics":
+            payload = self._read_json() or {}
+            return self._handle_send_metrics(payload)
         if path == "/api/simulations/run":
             payload = self._read_json() or {}
             template_ids = payload.get("templateIds") or []
@@ -421,6 +431,90 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         con.commit()
         con.close()
         self._send_json({"deleted": count})
+
+    def _handle_delete_employee(self, employee_id, payload):
+        """Delete a single employee, optionally scoped to an employer."""
+        employer_id = payload.get("employerId")
+        con = _connect()
+        cur = con.cursor()
+        cur.execute(
+            "SELECT employer_id FROM users WHERE id = ? AND role = 'employee'",
+            (employee_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            con.close()
+            return self._send_json({"error": "Employee not found"}, status=404)
+
+        if employer_id is not None:
+            try:
+                expected_employer = int(employer_id)
+            except (TypeError, ValueError):
+                con.close()
+                return self._send_json({"error": "Invalid employerId"}, status=400)
+            if row["employer_id"] not in (None, expected_employer):
+                con.close()
+                return self._send_json({"error": "Employer mismatch"}, status=403)
+
+        cur.execute("DELETE FROM users WHERE id = ? AND role = 'employee'", (employee_id,))
+        con.commit()
+        con.close()
+        self._send_json({"deleted": 1, "id": employee_id})
+
+    def _handle_send_metrics(self, payload):
+        """Email each employee a link to their metrics page."""
+        employer_id = payload.get("employerId")
+        base_url = (payload.get("baseUrl") or "http://localhost:5173").rstrip("/")
+        con = _connect()
+        cur = con.cursor()
+
+        resolved_employer_id = _resolve_employer_id(employer_id, con)
+        if resolved_employer_id is None:
+            con.close()
+            return self._send_json({"error": "Invalid employerId"}, status=400)
+
+        cur.execute(
+            """
+            SELECT id, name, email
+            FROM users
+            WHERE role = 'employee' AND employer_id = ?
+            """,
+            (resolved_employer_id,),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            con.close()
+            return self._send_json({"sent": 0, "message": "No employees found"}, status=200)
+
+        sent = 0
+        errors = []
+        for row in rows:
+            emp_id = row["id"]
+            name = row["name"] or "Team Member"
+            email = row["email"]
+            if not email:
+                errors.append({"id": emp_id, "error": "missing email"})
+                continue
+            link = f"{base_url}/employees/{emp_id}"
+            subject = "Your phishing performance dashboard"
+            body = f"""
+            Hi {name},<br><br>
+            Your latest phishing training metrics are ready. View them here:<br>
+            <a href="{link}">{link}</a><br><br>
+            Stay vigilant,<br>
+            Security Awareness Team
+            """
+            try:
+                success = send_email(email, subject, body)
+                if success:
+                    sent += 1
+                else:
+                    errors.append({"id": emp_id, "error": "send failed"})
+            except Exception as exc:
+                errors.append({"id": emp_id, "error": str(exc)})
+
+        con.close()
+        return self._send_json({"sent": sent, "errors": errors, "total": len(rows)})
 
     def _handle_run_simulations(self, template_ids):
         """Queue outbound phishing simulation emails for selected templates."""
