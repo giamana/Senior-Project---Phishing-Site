@@ -25,6 +25,14 @@ const DEPARTMENTS = [
   "Student/Early Career",
 ];
 
+const DIFFICULTY_OPTIONS = [
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
+  { value: "complex", label: "Complex" },
+  { value: "complex+", label: "Complex+" },
+];
+
 const statusPillStyles = {
   "Security Champion": "bg-emerald-100 text-emerald-700",
   "At Risk": "bg-red-100 text-red-700",
@@ -56,6 +64,7 @@ function PlatformPage() {
     localStorage.getItem(EMPLOYER_ID_KEY) || localStorage.getItem("employerId") || null
   );
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [difficultyFilters, setDifficultyFilters] = useState([]);
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
   const navigate = useNavigate();
@@ -199,6 +208,12 @@ function PlatformPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const filteredTemplates = useMemo(() => {
+    if (!difficultyFilters.length) return templates;
+    const allowed = new Set(difficultyFilters);
+    return templates.filter((t) => allowed.has(String(t.difficulty || "").toLowerCase()));
+  }, [templates, difficultyFilters]);
+
   const handleAddEmployee = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -218,11 +233,12 @@ function PlatformPage() {
     setSelectedTemplates((prev) => prev.includes(templateId) ? prev.filter((id) => id !== templateId) : [...prev, templateId]);
   };
 
-  const handleSelectAll = () => setSelectedTemplates(templates.map((t) => t.id));
+  const handleSelectAll = () => setSelectedTemplates(filteredTemplates.map((t) => t.id));
   const handleClearAll = () => setSelectedTemplates([]);
-  const handleSelectDifficulty = (level) => {
-    const matching = templates.filter((t) => t.difficulty === level).map((t) => t.id);
-    setSelectedTemplates(matching);
+  const toggleDifficultyFilter = (level) => {
+    setDifficultyFilters((prev) =>
+      prev.includes(level) ? prev.filter((lvl) => lvl !== level) : [...prev, level]
+    );
   };
 
   const handleDeleteAllEmployees = async () => {
@@ -350,6 +366,15 @@ function PlatformPage() {
     return typeof value === "number" ? value : 0;
   };
 
+  const getScoreValue = (employee) =>
+    typeof employee?.score === "number" ? employee.score : 0;
+
+  const getFailureCount = (employee) => {
+    const total = employee?.metrics?.total_responses;
+    if (typeof total !== "number" || total <= 0) return 0;
+    return Math.round(getRateValue(employee, "click_rate") * total);
+  };
+
   const sortedEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
     if (!sortConfig.key) return [...employees];
@@ -391,14 +416,22 @@ function PlatformPage() {
   const highestRiskEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
     return [...employees]
-      .sort((a, b) => getRateValue(b, "click_rate") - getRateValue(a, "click_rate"))
+      .sort((a, b) => {
+        const scoreDiff = getScoreValue(a) - getScoreValue(b); // lower score = higher risk
+        if (scoreDiff !== 0) return scoreDiff;
+        return getRateValue(b, "click_rate") - getRateValue(a, "click_rate");
+      })
       .slice(0, 5);
   }, [employees]);
 
   const lowestRiskEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
     return [...employees]
-      .sort((a, b) => getRateValue(a, "click_rate") - getRateValue(b, "click_rate"))
+      .sort((a, b) => {
+        const scoreDiff = getScoreValue(b) - getScoreValue(a); // higher score = lower risk
+        if (scoreDiff !== 0) return scoreDiff;
+        return getRateValue(a, "click_rate") - getRateValue(b, "click_rate");
+      })
       .slice(0, 5);
   }, [employees]);
 
@@ -695,67 +728,59 @@ function PlatformPage() {
                     simulation run.
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-sm text-gray-500">
-                  <span>{selectedTemplates.length} selected</span>
-                  <button
-                    type="button"
-                    className="text-indigo-600 hover:underline font-semibold"
-                    onClick={handleSelectAll}
-                    disabled={templates.length === 0}
-                  >
-                    Select all
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-600 hover:underline"
-                    onClick={() => handleSelectDifficulty("easy")}
-                    disabled={templates.length === 0}
-                  >
-                    All easy
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-600 hover:underline"
-                    onClick={() => handleSelectDifficulty("medium")}
-                    disabled={templates.length === 0}
-                  >
-                    All medium
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-600 hover:underline"
-                    onClick={() => handleSelectDifficulty("hard")}
-                    disabled={templates.length === 0}
-                  >
-                    All hard
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-600 hover:underline"
-                    onClick={() => handleSelectDifficulty("complex")}
-                    disabled={templates.length === 0}
-                  >
-                    All complex
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-600 hover:underline"
-                    onClick={() => handleSelectDifficulty("complex+")}
-                    disabled={templates.length === 0}
-                  >
-                    All complex+
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-500 hover:underline"
-                    onClick={handleClearAll}
-                  >
-                    Clear
-                  </button>
+                <div className="flex flex-col gap-2 text-sm text-gray-600 items-start md:items-end">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span>{selectedTemplates.length} selected</span>
+                    <button
+                      type="button"
+                      className="text-indigo-600 hover:underline font-semibold"
+                      onClick={handleSelectAll}
+                      disabled={filteredTemplates.length === 0}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="text-gray-500 hover:underline"
+                      onClick={handleClearAll}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs uppercase tracking-wide text-gray-500">
+                      Difficulty:
+                    </span>
+                    {DIFFICULTY_OPTIONS.map((option) => (
+                      <label
+                        key={option.value}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full border text-gray-700 cursor-pointer transition ${
+                          difficultyFilters.includes(option.value)
+                            ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                            : "border-gray-200 bg-white hover:border-indigo-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-indigo-600 rounded"
+                          checked={difficultyFilters.includes(option.value)}
+                          onChange={() => toggleDifficultyFilter(option.value)}
+                        />
+                        <span className="text-xs font-medium">{option.label}</span>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      className="text-gray-500 hover:underline text-xs ml-1"
+                      onClick={() => setDifficultyFilters([])}
+                    >
+                      Reset filters
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="grid md:grid-cols-2 gap-4 max-h-80 overflow-y-auto pr-2">
-                {templates.map((template) => (
+                {filteredTemplates.map((template) => (
                   <label
                     key={template.id}
                     className={`border rounded-lg p-4 flex flex-col cursor-pointer transition ${
@@ -804,7 +829,7 @@ function PlatformPage() {
 
             <div className="flex items-center justify-between mb-4">
               <h5 className="text-xl font-bold leading-none text-gray-900">Highest Risks</h5>
-              <a href="#" onClick={(e) => {e.preventDefault(); navigate("/highest");}}className="text-sm font-medium text-indigo-600 hover:underline">
+              <a href="#" onClick={(e) => {e.preventDefault(); navigate("/highest-risk");}}className="text-sm font-medium text-indigo-600 hover:underline">
               View all
             </a>
             </div>
@@ -821,12 +846,7 @@ function PlatformPage() {
                   <ul role="list" className="divide-y divide-gray-200">
                 {Array.isArray(employees) && employees.length > 0 ? (
                   highestRiskEmployees.map((emp, i) => {
-                      const failures =
-                        emp?.failures ??
-                        emp?.metrics?.failures ??
-                        (typeof emp?.metrics?.click_rate === "number"
-                          ? Math.round(emp.metrics.click_rate * 100)
-                          : 0);
+                      const failures = getFailureCount(emp);
 
                       return (
                         <li
@@ -852,26 +872,22 @@ function PlatformPage() {
 
             <div className="flex items-center justify-between mb-4">
               <h5 className="text-xl font-bold leading-none text-gray-900">Lowest Risks</h5>
-              <a href="#" onClick={(e) => {e.preventDefault(); navigate("/lowest");}}className="text-sm font-medium text-indigo-600 hover:underline">View all</a>
+              <a href="#" onClick={(e) => {e.preventDefault(); navigate("/lowest-risk");}}className="text-sm font-medium text-indigo-600 hover:underline">View all</a>
             </div>
 
             <div className="w-full">
               <hr className="text-neutral-300" />
 
-              <div className="grid grid-cols-2 bg-gray-100 p-3 rounded-t-lg font-semibold text-gray-700 text-center">
+              <div className="grid grid-cols-[1.5fr_1fr_0.7fr] bg-gray-100 p-3 rounded-t-lg font-semibold text-gray-700">
                 <p>Employee Email</p>
                 <p>Full Name</p>
+                <p className="text-center">Failures</p>
               </div>
 
               <ul role="list" className="divide-y divide-gray-200">
                 {Array.isArray(employees) && employees.length > 0 ? (
                   lowestRiskEmployees.map((emp, i) => {
-                      const failures =
-                        emp?.failures ??
-                        emp?.metrics?.failures ??
-                        (typeof emp?.metrics?.click_rate === "number"
-                          ? Math.round(emp.metrics.click_rate * 100)
-                          : 0);
+                      const failures = getFailureCount(emp);
 
                       return (
                         <li

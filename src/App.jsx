@@ -14,7 +14,6 @@ import SignUpPage from "./views/SignUpPage"
 import EmployeeDetailPage from "./views/EmployeeDetailPage"
 import HighestRisks from "./views/HighestRisks"
 import LowestRisks from "./views/LowestRisks"
-import Info from "./views/Info"
 
 import React from "react"
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -45,6 +44,8 @@ function NavBarWrapper() {
       location.pathname === "/resources" ||
       location.pathname === "/highest" ||
       location.pathname === "/lowest" ||
+      location.pathname === "/highest-risk" ||
+      location.pathname === "/lowest-risk" ||
       location.pathname === "/demo" ||
       location.pathname.startsWith("/platform") ||
       location.pathname.startsWith("/employees");
@@ -83,8 +84,9 @@ function App() {
            <Route path="/demo" element={<WatchDemoPage />} />
            <Route path="/signUp" element={<SignUpPage />} />
            <Route path="/highest" element={<HighestRisks />} />
+           <Route path="/highest-risk" element={<HighestRisks />} />
            <Route path="/lowest" element={<LowestRisks/>} />
-           <Route path="/info" element={<Info/>} />
+           <Route path="/lowest-risk" element={<LowestRisks/>} />
            <Route path="/virus" element={<VirusPage/>} />
         </Routes>
     </BrowserRouter>
