@@ -14,31 +14,34 @@ import SignUpPage from "./views/SignUpPage"
 import EmployeeDetailPage from "./views/EmployeeDetailPage"
 import HighestRisks from "./views/HighestRisks"
 import LowestRisks from "./views/LowestRisks"
+import Info from "./views/Info"
 
 import React from "react"
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import VirusPage from './views/VirusPage'
 
 
 function NavBarWrapper() {
     const location = useLocation();
     let navProps;
 
+    // left-1/2 transform -translate-x-1/2
     const defaultProps = {
       className:
-        "shadow-md bg-[#181818]/75 fixed top-0 z-20 w-3/5 justify-center items-center left-1/2 transform -translate-x-1/2",
+        "shadow-md bg-[#181818]/25 fixed top-0 z-20 w-full justify-center items-center ",
     };
 
     const platformProps = {
       className: "shadow-md bg-[#404143] fixed top-0 z-20 w-full justify-center items-center",
     };
 
-    if (location.pathname === "/login" || location.pathname === "/signUp") {
-      return null;
-    }
+    const homeProps = {
+      className: "shadow-md bg-[#181818]/75 fixed top-0 z-20 w-full justify-center items-center",
+    };
 
-    // Define onPlatform upfront
     const onPlatform =
       location.pathname === "/platform" ||
+      location.pathname === "/info" ||
       location.pathname === "/resources" ||
       location.pathname === "/highest" ||
       location.pathname === "/lowest" ||
@@ -46,9 +49,14 @@ function NavBarWrapper() {
       location.pathname.startsWith("/platform") ||
       location.pathname.startsWith("/employees");
 
-    if (onPlatform) {
+    if (location.pathname === "/login" || location.pathname === "/signUp" || location.pathname === "/virus") {
+      return null;
+    }
+
+  if (onPlatform) {
       navProps = platformProps;
-    } else {
+    } 
+    else {
       navProps = defaultProps;
     }
 
@@ -76,6 +84,8 @@ function App() {
            <Route path="/signUp" element={<SignUpPage />} />
            <Route path="/highest" element={<HighestRisks />} />
            <Route path="/lowest" element={<LowestRisks/>} />
+           <Route path="/info" element={<Info/>} />
+           <Route path="/virus" element={<VirusPage/>} />
         </Routes>
     </BrowserRouter>
   );
