@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
+import hashlib
 
 # Ensure project root is importable when run as a script
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -23,6 +24,22 @@ from backend.db.response_tracker import (
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
 DEFAULT_PORT = int(os.getenv("API_SERVER_PORT", "5000"))
+EMPLOYER_ROLE = "employer"
+EMPLOYEE_ROLE = "employee"
+
+
+def _ensure_auth_columns():
+    """Add missing auth-related columns to users table without destructive migrations."""
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+    cur.execute("PRAGMA table_info(users)")
+    columns = {row[1] for row in cur.fetchall()}
+    if "password" not in columns:
+        cur.execute("ALTER TABLE users ADD COLUMN password TEXT")
+    if "phone" not in columns:
+        cur.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+    con.commit()
+    con.close()
 
 
 def _connect():
@@ -96,6 +113,19 @@ def _resolve_employer_id(raw_employer_id, con):
     return cur.lastrowid
 
 
+def _hash_password(password):
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _verify_password(password, stored_hash):
+    if not stored_hash:
+        return False
+    return _hash_password(password) == stored_hash
+
+
+_ensure_auth_columns()
+
+
 class SecurityAwarenessHandler(BaseHTTPRequestHandler):
     """Lightweight HTTP API for employee management and simulation tracking."""
 
@@ -162,7 +192,8 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
             if not token:
                 return self._send_json({"error": "Missing tracking token"}, status=400)
             action = query.get("action", [None])[0]
-            return self._handle_tracking_event(token, action)
+            redirect_url = query.get("redirect", [None])[0]
+            return self._handle_tracking_event(token, action, redirect_url)
 
         self._send_json({"error": "Not found"}, status=404)
 
@@ -170,6 +201,21 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path == "/api/auth/signup":
+            payload = self._read_json()
+            if payload is None:
+                return self._send_json({"error": "Invalid JSON body"}, status=400)
+            return self._handle_auth_signup(payload)
+        if path == "/api/auth/google":
+            payload = self._read_json()
+            if payload is None:
+                return self._send_json({"error": "Invalid JSON body"}, status=400)
+            return self._handle_auth_google(payload)
+        if path == "/api/auth/login":
+            payload = self._read_json()
+            if payload is None:
+                return self._send_json({"error": "Invalid JSON body"}, status=400)
+            return self._handle_auth_login(payload)
         if path == "/api/employees":
             payload = self._read_json()
             if payload is None:
@@ -355,6 +401,158 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         con.close()
         self._send_json({"templates": templates})
 
+    def _handle_auth_signup(self, payload):
+        """Register a new employer account and ensure employer_id isolation."""
+        name = (payload or {}).get("name", "").strip()
+        email = (payload or {}).get("email", "").strip().lower()
+        password = (payload or {}).get("password", "")
+        phone = (payload or {}).get("phone", "") or None
+
+        if not name or not email or not password:
+            return self._send_json({"error": "Name, email, and password are required"}, status=400)
+
+        con = _connect()
+        cur = con.cursor()
+        password_hash = _hash_password(password)
+        try:
+            cur.execute(
+                """
+                INSERT INTO users (name, email, role, password, phone)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (name, email, EMPLOYER_ROLE, password_hash, phone),
+            )
+            user_id = cur.lastrowid
+            # Employer isolates data with their own employer_id
+            cur.execute("UPDATE users SET employer_id = ? WHERE id = ?", (user_id, user_id))
+            con.commit()
+        except sqlite3.IntegrityError as exc:
+            con.close()
+            return self._send_json({"error": f"Unable to create account: {exc}"}, status=400)
+
+        cur.execute("SELECT id, name, email, employer_id, role FROM users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        con.close()
+        if not row:
+            return self._send_json({"error": "Signup failed"}, status=500)
+
+        self._send_json(
+            {
+                "user": {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "email": row["email"],
+                    "employerId": row["employer_id"],
+                    "role": row["role"],
+                }
+            },
+            status=201,
+        )
+
+    def _handle_auth_login(self, payload):
+        """Authenticate an employer via email/password and ensure employer_id is set."""
+        email = (payload or {}).get("email", "").strip().lower()
+        password = (payload or {}).get("password", "")
+        if not email or not password:
+            return self._send_json({"error": "Email and password are required"}, status=400)
+
+        con = _connect()
+        cur = con.cursor()
+        cur.execute(
+            "SELECT id, name, email, role, employer_id, password FROM users WHERE email = ?",
+            (email,),
+        )
+        row = cur.fetchone()
+        if not row or row["role"] != EMPLOYER_ROLE or not _verify_password(password, row["password"]):
+            con.close()
+            return self._send_json({"error": "Invalid credentials"}, status=401)
+
+        employer_id = row["employer_id"]
+        if employer_id is None:
+            employer_id = row["id"]
+            cur.execute("UPDATE users SET employer_id = ? WHERE id = ?", (employer_id, row["id"]))
+            con.commit()
+        con.close()
+
+        self._send_json(
+            {
+                "user": {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "email": row["email"],
+                    "employerId": employer_id,
+                    "role": row["role"],
+                }
+            }
+        )
+
+    def _handle_auth_google(self, payload):
+        """Upsert an employer using Google profile data (email/name)."""
+        email = (payload or {}).get("email", "").strip().lower()
+        name = (payload or {}).get("name", "").strip() or email
+        phone = (payload or {}).get("phone", "") or None
+        if not email:
+            return self._send_json({"error": "Email is required"}, status=400)
+
+        con = _connect()
+        cur = con.cursor()
+        cur.execute(
+            "SELECT id, name, email, role, employer_id FROM users WHERE email = ? AND role = ?",
+            (email, EMPLOYER_ROLE),
+        )
+        row = cur.fetchone()
+        if row:
+            employer_id = row["employer_id"] or row["id"]
+            if row["employer_id"] is None:
+                cur.execute("UPDATE users SET employer_id = ? WHERE id = ?", (employer_id, row["id"]))
+                con.commit()
+            con.close()
+            return self._send_json(
+                {
+                    "user": {
+                        "id": row["id"],
+                        "name": row["name"],
+                        "email": row["email"],
+                        "employerId": employer_id,
+                        "role": row["role"],
+                    }
+                }
+            )
+
+        try:
+            cur.execute(
+                """
+                INSERT INTO users (name, email, role, phone)
+                VALUES (?, ?, ?, ?)
+                """,
+                (name, email, EMPLOYER_ROLE, phone),
+            )
+            user_id = cur.lastrowid
+            cur.execute("UPDATE users SET employer_id = ? WHERE id = ?", (user_id, user_id))
+            con.commit()
+        except sqlite3.IntegrityError as exc:
+            con.close()
+            return self._send_json({"error": f"Unable to create account: {exc}"}, status=400)
+
+        cur.execute("SELECT id, name, email, employer_id, role FROM users WHERE id = ?", (user_id,))
+        new_row = cur.fetchone()
+        con.close()
+        if not new_row:
+            return self._send_json({"error": "Google signup failed"}, status=500)
+
+        self._send_json(
+            {
+                "user": {
+                    "id": new_row["id"],
+                    "name": new_row["name"],
+                    "email": new_row["email"],
+                    "employerId": new_row["employer_id"],
+                    "role": new_row["role"],
+                }
+            },
+            status=201,
+        )
+
     def _handle_create_employee(self, payload):
         """Create a new employee record and return its persisted state."""
         name = (payload or {}).get("name", "").strip()
@@ -531,7 +729,7 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         ignored = mark_expired_simulations_as_ignored(hours)
         self._send_json({"ignored": ignored, "thresholdHours": hours})
 
-    def _handle_tracking_event(self, token, action_param):
+    def _handle_tracking_event(self, token, action_param, redirect_url=None):
         """Record a click/report action from a tracking pixel or link."""
         con = _connect()
         cur = con.cursor()
@@ -571,6 +769,13 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         )
         con.commit()
         con.close()
+
+        # Redirect to provided URL (e.g., virus awareness page) after recording.
+        if redirect_url:
+            self.send_response(302)
+            self.send_header("Location", redirect_url)
+            self.end_headers()
+            return
 
         message = (
             "Thanks for reporting this simulation."

@@ -170,7 +170,8 @@ def send_department_emails(allowed_template_ids=None):
         # Unique tokens let us distinguish clicks vs reports for this simulation.
         click_token = generate_tracking_token()
         report_token = generate_tracking_token()
-        click_url = VIRUS_PAGE_URL
+        # Track clicks and then redirect users to the virus page for awareness.
+        click_url = f"{build_tracking_url(click_token, action='clicked')}&redirect={VIRUS_PAGE_URL}"
         report_url = build_tracking_url(report_token, action="reported")
         final_body = render_body_with_tracking_links(personalized_body, click_url, report_url)
 

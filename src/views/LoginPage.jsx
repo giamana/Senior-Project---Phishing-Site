@@ -1,33 +1,57 @@
 import '../App.css';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { apiPost } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 function LoginPage() {
-  const navi = useNavigate();
-  const name =  useRef();
-  const password =  useRef();
+  const navigate = useNavigate();
+  const { login, authUser } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
-  const handleSumbit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    console.log(name.current.value);
-  }
+    setError('');
+    try {
+      const data = await apiPost('/api/auth/login', { email, password });
+      const user = data.user;
+      login(user);
+      navigate('/platform', { replace: true });
+    } catch (err) {
+      setError(err.message || 'Login failed');
+    }
+  };
   
   useEffect(() => {
+    if (authUser && authUser.role === "employer") {
+      navigate('/platform', { replace: true });
+      return;
+    }
     const hash = window.location.hash;
     if (hash.includes("access_token")) {
       const token = hash.split("access_token=")[1].split("&")[0];
-
       fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
-        .then((user) => {
-          console.log("Name:", user.name);
-          
-        });
+        .then(async (user) => {
+          try {
+            const data = await apiPost("/api/auth/google", {
+              name: user.name,
+              email: user.email,
+            });
+            login(data.user);
+            navigate("/platform", { replace: true });
+            window.history.replaceState(null, "", window.location.pathname + window.location.search);
+          } catch (err) {
+            setError(err.message || "Google sign-in failed");
+          }
+        })
+        .catch(() => setError("Google sign-in failed"));
     }
-  }, []);
+  }, [authUser, navigate, login]);
 
   return (
     <div className="flex">
@@ -45,32 +69,41 @@ function LoginPage() {
           <h3 className="text-gray-400 text-xl">Please log into your account.</h3>
         </div>
 
-        <form onSubmit={handleSumbit} className="flex flex-col w-full items-center justify-center">
+        <form onSubmit={handleSubmit} className="flex flex-col w-full items-center justify-center">
             <input
-              type="text"
-              placeholder="Username"
-              ref={name}
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="bg-gray-100 mt-2 border border-gray-300 text-lg w-1/2 p-2"
+              required
             />
             <input
               type="password"
               placeholder="Password"
-              ref={password}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="bg-gray-100 mt-7 border border-gray-300  text-lg w-1/2 p-2"
+              required
             />
-        </form>
+            {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
 
-        <div className="flex mt-6">
-          <button
-            // onClick={() => navi('/platform')}
-            className="bg-black hover:bg-[#CDCDCD] text-white font-bold py-3 px-10 mx-5"
-          >
-            Login
-          </button>
-          <button onClick={() => navi('/signUp')} className="bg-white hover:bg-[#CDCDCD] border border-black text-black font-bold py-3 px-10 mx-7">
-            Sign Up
-          </button>
-        </div>
+          <div className="flex mt-6">
+            <button
+              type="submit"
+              className="bg-black hover:bg-[#CDCDCD] text-white font-bold py-3 px-10 mx-5"
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/signUp')}
+              className="bg-white hover:bg-[#CDCDCD] border border-black text-black font-bold py-3 px-10 mx-7"
+            >
+              Sign Up
+            </button>
+          </div>
+        </form>
 
         <div className="text-neutral-500 flex mt-8 w-1/2 items-center">
           <hr className="flex-grow border-t border-neutral-400" />

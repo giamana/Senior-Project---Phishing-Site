@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 const EMPTY_FORM = { name: "", email: "", department: "" };
 const SELECTED_TEMPLATES_KEY = "saas_selected_templates";
@@ -49,6 +50,7 @@ const getEmployeeCacheKey = (employerId) =>
   employerId ? `${EMPLOYEE_CACHE_KEY}_${employerId}` : null;
 
 function PlatformPage() {
+  const { authUser, logout } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [summary, setSummary] = useState(null);
   const [templates, setTemplates] = useState([]);
@@ -61,7 +63,10 @@ function PlatformPage() {
   const [autoSimActive, setAutoSimActive] = useState(false);
   const [sendingMetrics, setSendingMetrics] = useState(false);
   const [employerId, setEmployerId] = useState(
-    localStorage.getItem(EMPLOYER_ID_KEY) || localStorage.getItem("employerId") || null
+    (authUser?.employerId && String(authUser.employerId)) ||
+      localStorage.getItem(EMPLOYER_ID_KEY) ||
+      localStorage.getItem("employerId") ||
+      null
   );
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [difficultyFilters, setDifficultyFilters] = useState([]);
@@ -318,6 +323,10 @@ function PlatformPage() {
 
   const startAutoSim = () => setAutoSimActive(true);
   const stopAutoSim = () => setAutoSimActive(false);
+  const handleLogout = () => {
+    logout();
+    navigate("/", { replace: true });
+  };
 
   useEffect(() => { localStorage.setItem(SELECTED_TEMPLATES_KEY, JSON.stringify(selectedTemplates)); }, [selectedTemplates]);
   useEffect(() => {
@@ -351,6 +360,14 @@ function PlatformPage() {
 
     fetchEmployees(employerId);
   }, [employerId]);
+
+  useEffect(() => {
+    if (authUser?.employerId) {
+      setEmployerId(String(authUser.employerId));
+    } else if (!authUser) {
+      setEmployerId(null);
+    }
+  }, [authUser]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -450,7 +467,12 @@ function PlatformPage() {
         </div>
         <ul className="space-y-3 text-gray-600 font-medium">
           <li className="p-2 rounded-lg hover:bg-gray-200 hover:text-gray-900 transition-all duration-200 cursor-pointer">Help Information</li>
-          <li className="p-2 rounded-lg text-red-600 hover:bg-red-100 hover:text-red-700 transition-all duration-200 cursor-pointer">Logout</li>
+          <button
+            className="p-2 rounded-lg text-left text-red-600 hover:bg-red-100 hover:text-red-700 transition-all duration-200 cursor-pointer w-full"
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
         </ul>
       </div>
 
@@ -458,7 +480,7 @@ function PlatformPage() {
         <div className="flex justify-between items-center">
         <div>
           <p className="text-gray-500">Your Dashboard</p>
-          <h1 className="text-4xl font-bold">Welcome back, Admin</h1>
+          <h1 className="text-4xl font-bold">Welcome, {authUser?.name || "Employer"}</h1>
         </div>
         {statusMessage && (
           <div

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import React from 'react';
 
-function NavBar({ className,  hideButton }) {
+function NavBar({ className, hideButton, isAuthenticated }) {
   return (
     <nav className= { className}> 
       <div className="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
@@ -13,8 +13,8 @@ function NavBar({ className,  hideButton }) {
               <Link to="/resources"className="text-white hover:bg-[#CDCDCD] hover:text-white px-3 py-2 rounded-md text-m">Resources</Link>
               <Link to="/about" className="text-white hover:bg-[#CDCDCD] hover:text-white px-3 py-2 rounded-md text-m">About</Link>
 
-              {!hideButton && (
-                <Link to="/login" className="bg-[#CDCDCD] hover:bg-[#CDCDCD] text-black font-bold py-2 px-4 rounded">Login In</Link>
+              {!hideButton && !isAuthenticated && (
+                <Link to="/login" className="bg-[#CDCDCD] hover:bg-[#CDCDCD] text-black font-bold py-2 px-4 rounded">Login</Link>
               )}
             </div>
           </div>  

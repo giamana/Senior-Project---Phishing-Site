@@ -1,31 +1,65 @@
-import React, { useEffect } from 'react';
-import { useRef } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { apiPost } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 function SignUpPage() {
-    const fname =  useRef();
-    const lname =  useRef();
-    const email =  useRef();
-    const number =  useRef();
+    const navigate = useNavigate();
+    const { login, authUser } = useAuth();
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
 
-    const handleSumbit = (event) => {
+    const handleSubmit = async (event) => {
         event.preventDefault();
-        console.log(fname.current.value);
-    }
+        setError('');
+        try {
+            const name = `${firstName} ${lastName}`.trim();
+            const data = await apiPost('/api/auth/signup', {
+                name,
+                email,
+                phone: phone || undefined,
+                password,
+            });
+            const user = data.user;
+            login(user);
+            navigate('/platform', { replace: true });
+        } catch (err) {
+            setError(err.message || 'Signup failed');
+        }
+    };
 
     useEffect(() => {
+        if (authUser && authUser.role === "employer") {
+            navigate('/platform', { replace: true });
+            return;
+        }
         const hash = window.location.hash;
-        if(hash.includes("access_token")){
-            const token = hash.split("access_token")[1].split("&")[0];
+        if (hash.includes("access_token")) {
+            const token = hash.split("access_token=")[1].split("&")[0];
 
             fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-                headers: {Authorization: `Bearer $token`},
+                headers: { Authorization: `Bearer ${token}` },
             })
             .then((res) => res.json())
-            .then((user) => {
-                console.log("Name:", user.name);
-            });
+            .then(async (user) => {
+                try {
+                    const data = await apiPost("/api/auth/google", {
+                        name: user.name,
+                        email: user.email,
+                    });
+                    login(data.user);
+                    navigate("/platform", { replace: true });
+                } catch (err) {
+                    setError(err.message || "Google sign-in failed");
+                }
+            })
+            .catch(() => setError("Google sign-in failed"));
         }
-    }, []);
+    }, [authUser, navigate, login]);
 
     return (
         <div className="relative min-h-screen">
@@ -35,18 +69,21 @@ function SignUpPage() {
             <div className="max-w-md w-full bg-black/80 backdrop-blur-md rounded-2xl shadow-2xl p-8">
             <h2 className="text-2xl font-bold text-center text-white mb-6">Create an Account</h2>
 
-            <form onSubmit={handleSumbit}>
+            <form onSubmit={handleSubmit}>
                 <div className="flex flex-row gap-3 mb-4">
                     <input
                     type="text"
                     placeholder="First Name"
-                    ref={fname}
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
                     className="w-1/2 p-2 rounded-md bg-transparent border border-neutral-700 text-white placeholder-neutral-500 shadow-xl"
+                    required
                     />
                     <input
                     type="text"
                     placeholder="Last Name"
-                    ref={lname}
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
                     className="w-1/2 p-2 rounded-md bg-transparent border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 "
                     />
                 </div>
@@ -54,49 +91,33 @@ function SignUpPage() {
                 <input
                     type="email"
                     placeholder="Email"
-                    ref={email}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full p-2 rounded-md bg-transparent border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 mb-4"
+                    required
                 />
 
                 <input
                     type="text"
                     placeholder="(xxx) xxx-xxxx"
-                    ref={number}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     className="w-full p-2 rounded-md bg-transparent border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2  mb-6"
                 />
 
-
-                <div className="flex flex-row w-full">
-                    <div className="ps-4 border border-gray-200 rounded-sm dark:border-neutral-700 flex items-center w-1/2">
-                        <input
-                        id="bordered-radio-1" type="radio" value="option1" name="bordered-radio" className="w-4 h-4  bg-gray-100 border-gray-300"
-                        />
-                        <label htmlFor="bordered-radio-1" className="w-full py-4 ms-2 text-sm font-medium text-gray-900 dark:text-gray-300">
-                        Employer
-                        </label>
-                    </div>
-
-                    <div className="ps-4 border border-gray-200 rounded-sm dark:border-neutral-700 flex items-center mx-30">
-                        <input
-                        id="bordered-radio-2"
-                        type="radio"
-                        value="option2"
-                        name="bordered-radio"
-                        className="w-4 h-4 bg-gray-100 border-gray-300" />
-                        <label
-                        htmlFor="bordered-radio-2"
-                        className="w-full py-4 ms-2 text-sm font-medium text-gray-900 dark:text-gray-300"
-                        >
-                        Employee
-                        </label>
-                    </div>
-                </div>
-
+                <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full p-2 rounded-md bg-transparent border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2  mb-6"
+                    required
+                />
+                {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
                 
             </form>
             
-
-            <button className="w-full bg-white hover:bg-neutral-800 hover:text-white text-black font-semibold py-2 rounded-md shadow-md transition-all duration-200">
+            <button onClick={handleSubmit} className="w-full bg-white hover:bg-neutral-800 hover:text-white text-black font-semibold py-2 rounded-md shadow-md transition-all duration-200">
                 Create Account
             </button>
 
@@ -118,9 +139,13 @@ function SignUpPage() {
 
                 <p className="text-center text-neutral-500 text-sm mt-4">
                 Already have an account?{" "}
-                <a href="#" className="text-neutral-300 hover:text-neutral-100 underline">
-                Sign in
-                </a>
+                <button
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className="text-neutral-300 hover:text-neutral-100 underline"
+                >
+                    Sign in
+                </button>
             </p>
             </div>
         </div>

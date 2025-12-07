@@ -14,14 +14,16 @@ import SignUpPage from "./views/SignUpPage"
 import EmployeeDetailPage from "./views/EmployeeDetailPage"
 import HighestRisks from "./views/HighestRisks"
 import LowestRisks from "./views/LowestRisks"
+import { AuthProvider, useAuth } from "./context/AuthContext"
 
 import React from "react"
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import VirusPage from './views/VirusPage'
 
 
 function NavBarWrapper() {
     const location = useLocation();
+    const { authUser } = useAuth();
     let navProps;
 
     // left-1/2 transform -translate-x-1/2
@@ -41,7 +43,6 @@ function NavBarWrapper() {
     const onPlatform =
       location.pathname === "/platform" ||
       location.pathname === "/info" ||
-      location.pathname === "/resources" ||
       location.pathname === "/highest" ||
       location.pathname === "/lowest" ||
       location.pathname === "/highest-risk" ||
@@ -63,33 +64,42 @@ function NavBarWrapper() {
 
     const hideButton = onPlatform;
 
-    return <NavBar {...navProps} hideButton={hideButton} />;
+    return <NavBar {...navProps} hideButton={hideButton} isAuthenticated={!!authUser} />;
   }
 
 
+function ProtectedRoute({ children }) {
+  const { authUser } = useAuth();
+  if (!authUser || authUser.role !== "employer") {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
 
 
 function App() {
   return (
-    <BrowserRouter>
-        <NavBarWrapper />
+    <AuthProvider>
+      <BrowserRouter>
+          <NavBarWrapper />
 
-        <Routes>
-           <Route path="/" element={<HomePage />} />
-           <Route path="/about" element={<AboutPage />} />
-           <Route path="/login" element={<LoginPage />} />
-           <Route path="/platform" element={<PlatformPage />} />
-           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
-           <Route path="/resources" element={<ResourcesPage />} />
-           <Route path="/demo" element={<WatchDemoPage />} />
-           <Route path="/signUp" element={<SignUpPage />} />
-           <Route path="/highest" element={<HighestRisks />} />
-           <Route path="/highest-risk" element={<HighestRisks />} />
-           <Route path="/lowest" element={<LowestRisks/>} />
-           <Route path="/lowest-risk" element={<LowestRisks/>} />
-           <Route path="/virus" element={<VirusPage/>} />
-        </Routes>
-    </BrowserRouter>
+          <Routes>
+             <Route path="/" element={<HomePage />} />
+             <Route path="/about" element={<AboutPage />} />
+             <Route path="/login" element={<LoginPage />} />
+             <Route path="/platform" element={<ProtectedRoute><PlatformPage /></ProtectedRoute>} />
+             <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+             <Route path="/resources" element={<ResourcesPage />} />
+             <Route path="/demo" element={<WatchDemoPage />} />
+             <Route path="/signUp" element={<SignUpPage />} />
+             <Route path="/highest" element={<ProtectedRoute><HighestRisks /></ProtectedRoute>} />
+             <Route path="/highest-risk" element={<ProtectedRoute><HighestRisks /></ProtectedRoute>} />
+             <Route path="/lowest" element={<ProtectedRoute><LowestRisks/></ProtectedRoute>} />
+             <Route path="/lowest-risk" element={<ProtectedRoute><LowestRisks/></ProtectedRoute>} />
+             <Route path="/virus" element={<VirusPage/>} />
+          </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
