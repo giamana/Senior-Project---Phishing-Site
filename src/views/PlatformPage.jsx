@@ -144,7 +144,7 @@ function PlatformPage() {
     }, [summary]);
   
   const fetchEmployees = async (targetEmployerId = employerId) => {
-    const activeEmployerId = targetEmployerId || employerId;
+    const activeEmployerId = targetEmployerId || employerId || localStorage.getItem("employerId");
     if (!activeEmployerId) {
       try {
         const data = await apiGet("/api/employees");
@@ -203,7 +203,7 @@ function PlatformPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await apiPost("/api/employees", { ...formData, employerId });
+      console.log("Adding employee with employerId:", employerId);
       setFormData(EMPTY_FORM);
       setStatusVariant("success");
       setStatusMessage("Employee added successfully.");

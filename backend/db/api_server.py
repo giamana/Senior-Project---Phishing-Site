@@ -5,6 +5,9 @@ import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
+from .auth_utils import hash_password, verify_password, create_token, invalidate_token
+
+
 
 # Ensure project root is importable when run as a script
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -72,7 +75,7 @@ def _resolve_employer_id(raw_employer_id, con):
         """
         SELECT employer_id
         FROM users
-        WHERE role = 'employee' AND employer_id IS NOT NULL
+        WHERE employer_id IS NOT NULL
         ORDER BY id DESC
         LIMIT 1
         """
@@ -88,18 +91,20 @@ def _resolve_employer_id(raw_employer_id, con):
 
     cur.execute(
         """
-        INSERT INTO users (name, email, department, role)
-        VALUES (?, ?, ?, 'employer')
+        INSERT INTO users (name, email, department)
+        VALUES (?, ?, ?)"
         """,
         ("Default Employer", "default-employer@localhost", "Default Organization"),
     )
+    con.commit()
     return cur.lastrowid
-
 
 class SecurityAwarenessHandler(BaseHTTPRequestHandler):
     """Lightweight HTTP API for employee management and simulation tracking."""
 
     server_version = "SecurityAwareness/1.0"
+
+    
 
     def _set_headers(self, status=200, content_type="application/json"):
         self.send_response(status)
@@ -166,9 +171,23 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
 
         self._send_json({"error": "Not found"}, status=404)
 
+        
+
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path == "/api/signup":
+            payload = self._read_json()
+            return self._handle_signup(payload)
+
+        if path == "/api/login":
+            payload = self._read_json()
+            return self._handle_login(payload)
+
+        if path == "/api/logout":
+            payload = self._read_json()
+            return self._handle_logout(payload)
 
         if path == "/api/employees":
             payload = self._read_json()
@@ -204,6 +223,73 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         return
 
     # ---- Route handlers ----
+    def _handle_signup(self, payload):
+        name = payload.get("name")
+        email = payload.get("email")
+        password = payload.get("password")
+        phone = payload.get("phone")
+        employer_id = payload.get("employerId")
+
+        if not name or not email or not password:
+            return self._send_json({"error": "Missing required fields"}, status=400)
+
+        con = _connect()
+        cur = con.cursor()
+        try:
+            cur.execute(
+                """
+                INSERT INTO users (name, email, hashed_password, phone, employer_id)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (name, email.lower(), hash_password(password), phone, employer_id),
+            )
+            con.commit()
+            user_id = cur.lastrowid
+        except sqlite3.IntegrityError:
+            con.close()
+            return self._send_json({"error": "Email already exists"}, status=400)
+        con.close()
+
+        token = create_token(user_id)
+        return self._send_json(
+            {
+                "id": user_id,
+                "email": email,
+                "phone": phone,
+                "employerId": employer_id,
+                "access_token": token,
+            },
+            status=201,
+        )
+
+
+    def _handle_login(self, payload):
+        email = payload.get("email")
+        password = payload.get("password")
+        if not email or not password:
+            return self._send_json({"error": "Missing credentials"}, status=400)
+
+        con = _connect()
+        cur = con.cursor()
+        cur.execute("SELECT id, hashed_password FROM users WHERE email = ?", (email.lower(),))
+        row = cur.fetchone()
+        con.close()
+
+        if not row or not verify_password(password, row["hashed_password"]):
+            return self._send_json({"error": "Invalid credentials"}, status=401)
+
+        token = create_token(row["id"])
+        return self._send_json(
+            {"id": row["id"], "email": email, "access_token": token}
+        )
+
+    def _handle_logout(self, payload):
+        token = payload.get("token")
+        if not token:
+            return self._send_json({"error": "Missing token"}, status=400)
+        invalidate_token(token)
+        return self._send_json({"logged_out": True})
+
 
     def _handle_get_employees(self, employer_id):
         """List employees (optionally scoped to an employer) with computed metrics."""
@@ -216,12 +302,13 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
 
         con = _connect()
         cur = con.cursor()
-        query = "SELECT id, name, email, department, created_at, employer_id FROM users WHERE role = 'employee'"
+        query = "SELECT * FROM users"
         params = []
         if employer_filter is not None:
-            query += " AND employer_id = ?"
+            query += " WHERE employer_id = ?"
             params.append(employer_filter)
         cur.execute(query, tuple(params))
+
         rows = cur.fetchall()
 
         employees = []
@@ -304,7 +391,7 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         con = _connect()
         cur = con.cursor()
         cur.execute(
-            "SELECT id, name, email, department, created_at FROM users WHERE id = ? AND role = 'employee'",
+            "SELECT id, name, email, department, created_at FROM users WHERE id = ?",
             (employee_id,),
         )
         row = cur.fetchone()
@@ -374,8 +461,9 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         try:
             cur.execute(
                 """
-                INSERT INTO users (name, email, department, employer_id, role)
-                VALUES (?, ?, ?, ?, 'employee')
+               INSERT INTO users (name, email, department, employer_id)
+               VALUES (?, ?, ?, ?)
+
                 """,
                 (name, email, department or None, resolved_employer_id),
             )
@@ -477,7 +565,7 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
             """
             SELECT id, name, email
             FROM users
-            WHERE role = 'employee' AND employer_id = ?
+            WHERE employer_id = ?
             """,
             (resolved_employer_id,),
         )
@@ -530,6 +618,7 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
             hours = 24
         ignored = mark_expired_simulations_as_ignored(hours)
         self._send_json({"ignored": ignored, "thresholdHours": hours})
+        
 
     def _handle_tracking_event(self, token, action_param):
         """Record a click/report action from a tracking pixel or link."""
