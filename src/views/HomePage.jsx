@@ -13,7 +13,7 @@ function HomePage() {
         <video src="./homepageVid.mp4" alt="Background" className="w-full h-screen object-cover absolute inset-0 bg-gradient-to-b from-black/40 via-black/10 to-black/40 pointer-events-none" autoPlay muted loop playsInline ></video>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <h1 className="text-white text-8xl font-bold z-10 text-center">Your Crew’s Shield <br />Against Phishing</h1>
-          <button onClick={() => navigate('/demo')} class="bg-white hover:bg-[#CDCDCD] text-black font-bold py-5 px-5 rounded mt-5 p-2">Watch Our Demo</button>
+          <button onClick={() => navigate('/signUp')} class="bg-white hover:bg-[#CDCDCD] text-black font-bold py-5 px-5 rounded mt-5 p-4">Sign Up</button>
         </div>
       </div> 
 

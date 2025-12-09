@@ -605,7 +605,7 @@ function PlatformPage() {
         {runningSimulation ? "Running..." : "Run Simulation"}
       </button>
       <button
-        className="fixed bottom-8 right-48 bg-gray-200 hover:bg-gray-300 text-gray-900 px-6 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60"
+        className="fixed bottom-8 right-48 bg-gray-200 hover:bg-gray-300 text-gray-900 px-6 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60 mr-10"
         onClick={autoSimActive ? stopAutoSim : startAutoSim}
         disabled={selectedTemplates.length === 0}
       >
