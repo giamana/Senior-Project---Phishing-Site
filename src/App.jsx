@@ -4,6 +4,7 @@ import viteLogo from '/vite.svg'
 import './App.css'
 
 import NavBar from './components/NavBar'
+import Footer from './components/Footer'
 import HomePage from "./views/HomePage"
 import LoginPage from "./views/LoginPage"
 import PlatformPage from "./views/PlatformPage"
@@ -14,7 +15,7 @@ import SignUpPage from "./views/SignUpPage"
 import EmployeeDetailPage from "./views/EmployeeDetailPage"
 import HighestRisks from "./views/HighestRisks"
 import LowestRisks from "./views/LowestRisks"
-import Info from "./views/Info"
+
 
 import React from "react"
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ function NavBarWrapper() {
       location.pathname === "/info" ||
       location.pathname === "/resources" ||
       location.pathname === "/highest" ||
+      location.pathname === "/about" ||
       location.pathname === "/lowest" ||
       location.pathname === "/demo" ||
       location.pathname.startsWith("/platform") ||
@@ -66,7 +68,9 @@ function NavBarWrapper() {
   }
 
 
-
+function FooterWrapper(){
+  const location = useLocation();
+}
 
 function App() {
   return (
@@ -84,9 +88,10 @@ function App() {
            <Route path="/signUp" element={<SignUpPage />} />
            <Route path="/highest" element={<HighestRisks />} />
            <Route path="/lowest" element={<LowestRisks/>} />
-           <Route path="/info" element={<Info/>} />
            <Route path="/virus" element={<VirusPage/>} />
         </Routes>
+
+        <Footer />
     </BrowserRouter>
   );
 }
