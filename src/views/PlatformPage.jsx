@@ -955,20 +955,22 @@ function PlatformPage() {
           </p>
         </div>
 
-        <button
-        className="fixed bottom-8 right-8 bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60"
-        onClick={() => handleRunSimulation()}
-        disabled={runningSimulation || selectedTemplates.length === 0}
-      >
-        {runningSimulation ? "Running..." : "Run Simulation"}
-      </button>
-      <button
-        className="fixed bottom-8 right-48 bg-gray-200 hover:bg-gray-300 text-gray-900 px-6 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60"
-        onClick={autoSimActive ? stopAutoSim : startAutoSim}
-        disabled={selectedTemplates.length === 0}
-      >
-        {autoSimActive ? "Stop Auto Simulation" : "Start Auto Simulation"}
-      </button>
+        <div className="fixed bottom-8 right-8 flex flex-col md:flex-row gap-3">
+          <button
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60"
+            onClick={() => handleRunSimulation()}
+            disabled={runningSimulation || selectedTemplates.length === 0}
+          >
+            {runningSimulation ? "Running..." : "Run Simulation"}
+          </button>
+          <button
+            className="bg-gray-200 hover:bg-gray-300 text-gray-900 px-6 py-4 rounded-full font-semibold shadow-lg disabled:opacity-60"
+            onClick={autoSimActive ? stopAutoSim : startAutoSim}
+            disabled={selectedTemplates.length === 0}
+          >
+            {autoSimActive ? "Stop Auto Simulation" : "Start Auto Simulation"}
+          </button>
+        </div>
       </div>
     </div>
   );

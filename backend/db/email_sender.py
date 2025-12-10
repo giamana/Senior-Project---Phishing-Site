@@ -1970,6 +1970,7 @@ def add_default_email_templates():
         ("Housing Support Update", "Reminder: Submit Housing Verification Documents", "Dear {name},\n\nWe noticed you have not completed the housing verification form required for relocation assistance. Submit your documentation immediately to avoid disqualification from the stipend program.\n\n[Submit Documents]", "complex", "Student/Early Career", "Financial lure, urgent documentation request", 1),
         ("Certification Training Deadline", "Mandatory Early-Career Training Module Overdue", "Dear {name},\n\nYour introductory safety and compliance training remains incomplete. This module is required for interns working in operational areas. Complete the training before your access expires.\n\n[Complete Training]", "complex", "Student/Early Career", "Fake LMS portal, expiry warning", 1),
         ("Career Fair Registration Error", "Important: Your Registration Could Not Be Processed", "Dear {name},\n\nYour registration for the Airline Early-Career Networking Fair failed due to incomplete profile data. Spots are limited, so you must update your registration immediately using the portal below.\n\n[Fix Registration]", "complex", "Student/Early Career", "FOMO lure, fake event portal", 1),
+    
     ]
     templates.extend(extra_templates)
 
