@@ -14,7 +14,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from backend.db.email_scheduler import send_department_emails, send_email
+from backend.db.email_scheduler import send_department_emails
 from backend.db.response_tracker import (
     compute_employer_rollup,
     compute_user_metrics,
@@ -194,19 +194,9 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
             if payload is None:
                 return self._send_json({"error": "Invalid JSON body"}, status=400)
             return self._handle_create_employee(payload)
-        if path.startswith("/api/employees/") and path.endswith("/delete"):
-            trimmed = path[: -len("/delete")]
-            employee_id = self._parse_id("/api/employees/", trimmed)
-            if employee_id is None:
-                return self._send_json({"error": "Invalid employee id"}, status=400)
-            payload = self._read_json() or {}
-            return self._handle_delete_employee(employee_id, payload)
         if path == "/api/employees/delete_all":
             payload = self._read_json() or {}
             return self._handle_delete_employees(payload)
-        if path == "/api/employees/send_metrics":
-            payload = self._read_json() or {}
-            return self._handle_send_metrics(payload)
         if path == "/api/simulations/run":
             payload = self._read_json() or {}
             template_ids = payload.get("templateIds") or []

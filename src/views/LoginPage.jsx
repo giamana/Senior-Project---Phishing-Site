@@ -23,6 +23,10 @@ function LoginPage() {
   };
 
   useEffect(() => {
+    if (authUser && authUser.role === "employer") {
+      navigate('/platform', { replace: true });
+      return;
+    }
     const hash = window.location.hash;
     if (hash.includes("access_token")) {
       const token = hash.split("access_token=")[1].split("&")[0];

@@ -1,7 +1,5 @@
-import '../App.css';
-import NavBar from '../components/NavBar';
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import '../App.css';
 
 
 function HomePage() {
@@ -175,11 +173,11 @@ function HomePage() {
         <div className="md:w-1/2 items-center justify-center">
           <h1 className="text-6xl font-extralight mb-6 text-center">Resilience Tracker</h1>
           <p className="text-lg text-gray-700 leading-relaxed text-center">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Officiis ipsam necessitatibus deserunt illum recusandae, fugiat saepe esse ea. 
-            Veniam quae nisi autem saepe repellendus maxime adipisci vel aliquid, nulla illum?
+            Monitor how prepared your team truly is. Our Resilience Tracker gives employers real-time visibility into employee performance across phishing simulations, training modules, and reporting behaviors.
 
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Tempore optio ipsum, iure et ipsam odio rerum magni ratione corporis doloremque. 
-            Est tempora neque quo error eveniet veniam quaerat voluptate ullam.
+            Track improvements over time, spot high-risk departments, and identify employees who may need additional support. With clear metrics and actionable insights, your organization can strengthen its defenses long before a real threat appears.
+
+            Understand where your team stands today and how much stronger they’ll be tomorrow.
           </p>
         </div>
 
