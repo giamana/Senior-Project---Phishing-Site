@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import random
 import os
 import sys
+from backend.db.email_scheduler import send_email
 
 """
 Utility helpers for seeding the email_templates table and sending outbound
@@ -14,7 +15,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from backend.db.email_scheduler import send_email
+
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
 
