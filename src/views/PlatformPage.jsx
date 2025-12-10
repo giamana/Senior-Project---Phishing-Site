@@ -488,28 +488,6 @@ function PlatformPage() {
       .slice(0, 5);
   }, [employees]);
 
-  const handleLogout = async () => {
-    try {
-      // If you’re storing a token, send it to backend
-      const token = localStorage.getItem("token");
-      if (token) {
-        await apiPost("/api/logout", { token });
-      }
-
-      // Clear all local storage keys related to session
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("saas_employer_id");
-      localStorage.removeItem("saas_selected_templates");
-      localStorage.removeItem("saas_auto_sim_active");
-
-      // Redirect to login page
-      navigate("/login");
-    } catch (err) {
-      setStatusVariant("error");
-      setStatusMessage(`Logout failed: ${err.message}`);
-    }
-    };
 
 
   return (
