@@ -84,7 +84,7 @@ def _resolve_employer_id(raw_employer_id, con):
     if row and row["employer_id"] is not None:
         return int(row["employer_id"])
 
-    cur.execute("SELECT id FROM users WHERE role = 'employer' ORDER BY id ASC LIMIT 1")
+    cur.execute("SELECT DISTINCT employer_id FROM users WHERE employer_id IS NOT NULL ORDER BY employer_id ASC LIMIT 1")
     row = cur.fetchone()
     if row:
         return int(row["id"])
@@ -492,7 +492,6 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
         )
 
     def _handle_delete_employees(self, payload):
-        """Delete all employees for a given employer, keeping the scope tight."""
         employer_id = payload.get("employerId")
         con = _connect()
         cur = con.cursor()
@@ -501,34 +500,20 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
             con.close()
             return self._send_json({"error": "Invalid employerId"}, status=400)
 
-        cur.execute(
-            """
-            UPDATE users
-            SET employer_id = ?
-            WHERE role = 'employee' AND employer_id IS NULL
-            """,
-            (resolved_employer_id,),
-        )
-        con.commit()
-
-        where = "role = 'employee' AND employer_id = ?"
-        params = [resolved_employer_id]
-        cur.execute(f"SELECT COUNT(1) FROM users WHERE {where}", tuple(params))
+    # ✅ count and delete by employer_id only
+        cur.execute("SELECT COUNT(1) FROM users WHERE employer_id = ?", (resolved_employer_id,))
         count = cur.fetchone()[0] or 0
-        cur.execute(f"DELETE FROM users WHERE {where}", tuple(params))
+        cur.execute("DELETE FROM users WHERE employer_id = ?", (resolved_employer_id,))
         con.commit()
         con.close()
         self._send_json({"deleted": count})
 
+
     def _handle_delete_employee(self, employee_id, payload):
-        """Delete a single employee, optionally scoped to an employer."""
         employer_id = payload.get("employerId")
         con = _connect()
         cur = con.cursor()
-        cur.execute(
-            "SELECT employer_id FROM users WHERE id = ? AND role = 'employee'",
-            (employee_id,),
-        )
+        cur.execute("SELECT employer_id FROM users WHERE id = ?", (employee_id,))
         row = cur.fetchone()
         if not row:
             con.close()
@@ -544,10 +529,12 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
                 con.close()
                 return self._send_json({"error": "Employer mismatch"}, status=403)
 
-        cur.execute("DELETE FROM users WHERE id = ? AND role = 'employee'", (employee_id,))
+    # ✅ delete without role filter
+        cur.execute("DELETE FROM users WHERE id = ?", (employee_id,))
         con.commit()
         con.close()
         self._send_json({"deleted": 1, "id": employee_id})
+
 
     def _handle_send_metrics(self, payload):
         """Email each employee a link to their metrics page."""

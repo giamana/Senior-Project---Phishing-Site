@@ -53,12 +53,20 @@ function PlatformPage() {
   const [autoSimActive, setAutoSimActive] = useState(false);
   const [sendingMetrics, setSendingMetrics] = useState(false);
   const [employerId, setEmployerId] = useState(
-    localStorage.getItem(EMPLOYER_ID_KEY) || localStorage.getItem("employerId") || null
+   localStorage.getItem(EMPLOYER_ID_KEY) || null
   );
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const raw =
+      localStorage.getItem(EMPLOYER_ID_KEY) || localStorage.getItem("employerId");
+    if (raw && raw !== "undefined") {
+      setEmployerId(raw);
+    }
+  }, []);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -144,46 +152,74 @@ function PlatformPage() {
     }, [summary]);
   
   const fetchEmployees = async (targetEmployerId = employerId) => {
-    const activeEmployerId = targetEmployerId || employerId || localStorage.getItem("employerId");
-    if (!activeEmployerId) {
-      try {
-        const data = await apiGet("/api/employees");
-        const employerIds = Array.from(
-          new Set((data.employees || []).map((emp) => emp.employer_id).filter((id) => id !== null && id !== undefined))
-        );
-        if (employerIds.length === 1) {
-          setEmployerId(String(employerIds[0]));
-          return;
-        }
-      } catch (err) {
-        console.warn("Unable to derive employer id from employees list", err);
-      }
-      setEmployees([]);
-      setSummary(null);
-      setStatusVariant("error");
-      setStatusMessage("Employer not set; please log in again to load employees.");
-      return;
-    }
+  // Normalize employerId from state or localStorage
+  let activeEmployerId =
+    targetEmployerId ||
+    employerId ||
+    localStorage.getItem(EMPLOYER_ID_KEY) ||
+    localStorage.getItem("employerId");
+
+  // Guard against string "undefined"
+  if (activeEmployerId === "undefined") {
+    activeEmployerId = null;
+  }
+
+  if (!activeEmployerId) {
     try {
-      const data = await apiGet(`/api/employees?employerId=${activeEmployerId}`);
-      setEmployees(data.employees || []);
-      setSummary(data.summary || null);
-      if (!employerId && activeEmployerId) {
-        setEmployerId(String(activeEmployerId));
-        localStorage.setItem(EMPLOYER_ID_KEY, String(activeEmployerId));
-      }
-      const cacheKey = getEmployeeCacheKey(activeEmployerId);
-      if (cacheKey) {
-        localStorage.setItem(
-          cacheKey,
-          JSON.stringify({ employees: data.employees || [], summary: data.summary || null })
-        );
+      const data = await apiGet("/api/employees");
+      const employerIds = Array.from(
+        new Set(
+          (data.employees || [])
+            .map((emp) => emp.employer_id)
+            .filter((id) => id !== null && id !== undefined)
+        )
+      );
+
+      if (employerIds.length === 1) {
+        const derivedId = String(employerIds[0]);
+        setEmployerId(derivedId);
+        localStorage.setItem(EMPLOYER_ID_KEY, derivedId);
+        return;
       }
     } catch (err) {
-      setStatusVariant("error");
-      setStatusMessage(`Failed to load employees: ${err.message}`);
+      console.warn("Unable to derive employer id from employees list", err);
     }
-  };
+
+    setEmployees([]);
+    setSummary(null);
+    setStatusVariant("error");
+    setStatusMessage("Employer not set; please log in again to load employees.");
+    return;
+  }
+
+  try {
+    const data = await apiGet(`/api/employees?employerId=${activeEmployerId}`);
+    setEmployees(data.employees || []);
+    setSummary(data.summary || null);
+
+    // Ensure employerId state + localStorage are updated
+    if (!employerId && activeEmployerId && activeEmployerId !== "undefined") {
+      const normalizedId = String(activeEmployerId);
+      setEmployerId(normalizedId);
+      localStorage.setItem(EMPLOYER_ID_KEY, normalizedId);
+    }
+
+    const cacheKey = getEmployeeCacheKey(activeEmployerId);
+    if (cacheKey) {
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          employees: data.employees || [],
+          summary: data.summary || null,
+        })
+      );
+    }
+  } catch (err) {
+    setStatusVariant("error");
+    setStatusMessage(`Failed to load employees: ${err.message}`);
+  }
+};
+
 
   const fetchTemplates = async () => {
     try {
@@ -199,20 +235,29 @@ function PlatformPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+
   const handleAddEmployee = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      console.log("Adding employee with employerId:", employerId);
-      setFormData(EMPTY_FORM);
-      setStatusVariant("success");
-      setStatusMessage("Employee added successfully.");
-      fetchEmployees();
-    } catch (err) {
-      setStatusVariant("error");
-      setStatusMessage(`Unable to add employee: ${err.message}`);
-    } finally { setSubmitting(false); }
-  };
+  e.preventDefault();
+  setSubmitting(true);
+  try {
+    const payload = {
+      ...formData,
+      ...(employerId && employerId !== "undefined" && { employerId: parseInt(employerId) }),
+    };
+    console.log("Adding employee with payload:", payload);
+    await apiPost("/api/employees", payload);
+    setFormData(EMPTY_FORM);
+    setStatusVariant("success");
+    setStatusMessage("Employee added successfully.");
+    fetchEmployees();
+  } catch (err) {
+    setStatusVariant("error");
+    setStatusMessage(`Unable to add employee: ${err.message}`);
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   const toggleTemplate = (templateId) => {
     setSelectedTemplates((prev) => prev.includes(templateId) ? prev.filter((id) => id !== templateId) : [...prev, templateId]);
@@ -402,6 +447,28 @@ function PlatformPage() {
       .slice(0, 5);
   }, [employees]);
 
+  const handleLogout = async () => {
+    try {
+      // If you’re storing a token, send it to backend
+      const token = localStorage.getItem("token");
+      if (token) {
+        await apiPost("/api/logout", { token });
+      }
+
+      // Clear all local storage keys related to session
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("saas_employer_id");
+      localStorage.removeItem("saas_selected_templates");
+      localStorage.removeItem("saas_auto_sim_active");
+
+      // Redirect to login page
+      navigate("/login");
+    } catch (err) {
+      setStatusVariant("error");
+      setStatusMessage(`Logout failed: ${err.message}`);
+    }
+    };
 
 
   return (
