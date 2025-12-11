@@ -472,12 +472,13 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
 
         try:
             cur.execute(
-                """
-                INSERT INTO users (name, email, hashed_password, department, employer_id, role)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (name, email, hash_password(password), department or None, resolved_employer_id, "employee"),
-            )
+                    """
+                    INSERT INTO users (name, email, hashed_password, department, employer_id, role)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (name, email, hash_password(password), department or None, resolved_employer_id, "employee"),
+                )
+
             employee_id = cur.lastrowid
             con.commit()
         except sqlite3.IntegrityError as exc:

@@ -243,6 +243,7 @@ function PlatformPage() {
     const payload = {
       ...formData,
       ...(employerId && employerId !== "undefined" && { employerId: parseInt(employerId) }),
+      password: "Temp123", // 👈 add this
     };
     console.log("Adding employee with payload:", payload);
     await apiPost("/api/employees", payload);
@@ -257,6 +258,7 @@ function PlatformPage() {
     setSubmitting(false);
   }
 };
+
 
 
   const toggleTemplate = (templateId) => {
