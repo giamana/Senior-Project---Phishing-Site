@@ -514,7 +514,7 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
             con.close()
             return self._send_json({"error": "Invalid employerId"}, status=400)
 
-    # ✅ count and delete by employer_id only
+    
         cur.execute("SELECT COUNT(1) FROM users WHERE employer_id = ?", (resolved_employer_id,))
         count = cur.fetchone()[0] or 0
         cur.execute("DELETE FROM users WHERE employer_id = ?", (resolved_employer_id,))
@@ -543,7 +543,7 @@ class SecurityAwarenessHandler(BaseHTTPRequestHandler):
                 con.close()
                 return self._send_json({"error": "Employer mismatch"}, status=403)
 
-    # ✅ delete without role filter
+    
         cur.execute("DELETE FROM users WHERE id = ?", (employee_id,))
         con.commit()
         con.close()
