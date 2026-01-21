@@ -32,7 +32,7 @@ function LoginPage() {
         .then((res) => res.json())
         .then((user) => {
           console.log("Google user:", user);
-          // You could call auth.login(token, user) here if you want to integrate Google login
+          
         });
     }
   }, [auth]);
