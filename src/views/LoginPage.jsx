@@ -1,7 +1,7 @@
 import "../App.css";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
-import { useAuth } from "../auth/AuthProvider"; // <-- import your provider
+import { useAuth } from "../auth/AuthProvider"; 
 
 function LoginPage() {
   const navi = useNavigate();

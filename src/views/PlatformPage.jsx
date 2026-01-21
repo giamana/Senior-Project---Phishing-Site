@@ -243,7 +243,7 @@ function PlatformPage() {
     const payload = {
       ...formData,
       ...(employerId && employerId !== "undefined" && { employerId: parseInt(employerId) }),
-      password: "Temp123", // 👈 add this
+      password: "Temp123", 
     };
     console.log("Adding employee with payload:", payload);
     await apiPost("/api/employees", payload);
